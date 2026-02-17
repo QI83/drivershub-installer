@@ -9,7 +9,7 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Baixe o script:
-   wget [URL_DO_SCRIPT]/install-drivershub.sh
+   wget https://github.com/KIQ09/drivershub-installer/blob/main/scripts/install-drivershub.sh
    chmod +x install-drivershub.sh
 
 2. Execute:
