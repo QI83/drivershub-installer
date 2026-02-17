@@ -7,7 +7,7 @@
 
 > **Instalador automatizado completo do Drivers Hub Backend para transportadoras virtuais de Euro Truck Simulator 2 e American Truck Simulator.**
 
-[🚀 Instalação Rápida](##🚀Instalação_Rápida) • [📖 Documentação](##📖Documentação) • [🆘 Suporte](##🆘Suporte) • [🤝 Contribuir](##🤝Contribuind)
+[🚀 Instalação Rápida](##🚀Instalação_Rápida) • [📖 Documentação](##📖Documentação) • [🆘 Suporte](#-suporte) • [🤝 Contribuir](#-contribuindo)
 
 ---
 
