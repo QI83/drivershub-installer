@@ -1,0 +1,23 @@
+# Arquivos temporários
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+
+# Configurações locais
+config.json
+*.backup
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+__pycache__/
+*.pyc
+
+# Testes
+test_*
