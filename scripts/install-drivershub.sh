@@ -49,7 +49,7 @@ print_header() {
     echo "║              Euro Truck Simulator 2 / ATS                     ║"
     echo "║                                                               ║"
 	echo "║                                                               ║"
-	echo "║ Versão: 1.0.0                                                 ║"
+	echo "║ Versão: 1.0.1                                                 ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
