@@ -16,7 +16,7 @@
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                 ║
+║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 [PASSO 3/10] ✅ Instalando dependências do sistema
