@@ -2,7 +2,7 @@
 
 ################################################################################
 # Script de Instalação Automatizada do Drivers Hub
-# Versão: 1.0.0
+# Versão: 1.0.1
 # Data: Fevereiro 2026
 # 
 # Este script automatiza a instalação completa do Drivers Hub Backend
@@ -48,6 +48,8 @@ print_header() {
     echo "║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║"
     echo "║              Euro Truck Simulator 2 / ATS                     ║"
     echo "║                                                               ║"
+	echo "║                                                               ║"
+	echo "║ Versão: 1.0.0                                                 ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -604,7 +606,7 @@ print_final_info() {
     echo -e "${GREEN}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
     echo "║                                                               ║"
-    echo "║              ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅         ║"
+    echo "║           ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅            ║"
     echo "║                                                               ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
