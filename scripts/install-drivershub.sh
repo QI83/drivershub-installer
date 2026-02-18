@@ -45,7 +45,7 @@ print_header() {
     echo -e "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
     echo "║                                                               ║"
-    echo "║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                 ║"
+    echo "║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║"
     echo "║              Euro Truck Simulator 2 / ATS                     ║"
     echo "║                                                               ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
@@ -415,6 +415,14 @@ create_config_file() {
         "channel_id": "",
         "webhook_url": ""
     },
+    "hook_audit_log": {
+        "channel_id": "",
+        "webhook_url": ""
+    },
+    "hook_event_log": {
+        "channel_id": "",
+        "webhook_url": ""
+    },
     "delivery_webhook_image_urls": [
         "https://c.tenor.com/fjTTED8MZxIAAAAC/truck.gif",
         "https://c.tenor.com/QhMgCV8uMvIAAAAC/airtime-weeee.gif",
@@ -596,7 +604,7 @@ print_final_info() {
     echo -e "${GREEN}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
     echo "║                                                               ║"
-    echo "║              ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅           ║"
+    echo "║              ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅         ║"
     echo "║                                                               ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
