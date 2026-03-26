@@ -274,8 +274,6 @@ O [Drivers Hub Backend](https://github.com/CharlesWithC/HubBackend) é copyright
 
 Se este projeto te ajudou, considere dar uma ⭐!
 
-https://www.star-history.com/?repos=KIQ09%2Fdrivershub-installer&type=date&legend=top-left
-
 [![Star History](https://api.star-history.com/svg?repos=KIQ09/drivershub-installer&type=Date)](https://star-history.com/#KIQ09/drivershub-installer&Date)
 
 ---
