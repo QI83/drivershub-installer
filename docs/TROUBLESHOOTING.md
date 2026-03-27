@@ -1,211 +1,273 @@
-# 🔧 Solução Rápida de Problemas - Drivers Hub
+# 🔧 Solução Rápida de Problemas — Drivers Hub
 
-## ⚡ Problemas Comuns e Soluções Rápidas
+## ⚡ Diagnóstico Rápido
 
-### 🔴 Serviço não inicia
+Antes de buscar o problema específico, rode o verificador:
 
 ```bash
-# Ver erro específico
-sudo journalctl -u drivershub-[SIGLA] -n 20 --no-pager
-
-# Causas comuns:
+bash scripts/verificar-instalacao.sh
 ```
 
-**1. Porta já em uso**
+Se preferir coletar tudo de uma vez para pedir ajuda:
+
 ```bash
-# Verificar quem está usando a porta
-sudo lsof -i :7777
+cat << 'EOF' > ~/diagnostico.txt
+=== SISTEMA ===
+$(uname -a)
+$(lsb_release -a 2>/dev/null || cat /etc/os-release)
 
-# Matar processo (se necessário)
-sudo kill -9 [PID]
+=== SERVICOS ===
+$(sudo systemctl status drivershub-[SIGLA] --no-pager 2>&1)
+$(sudo systemctl status mysql --no-pager 2>&1)
+$(sudo systemctl status redis-server --no-pager 2>&1)
+$(sudo systemctl status nginx --no-pager 2>&1)
 
-# Ou mudar a porta no config.json
-nano /opt/drivershub/HubBackend/config.json
-# Alterar: "server_port": 7777 para outra porta
-```
+=== LOGS (últimas 50 linhas) ===
+$(sudo journalctl -u drivershub-[SIGLA] -n 50 --no-pager 2>&1)
 
-**2. Erro no config.json**
-```bash
-# Validar JSON
-python3 -m json.tool /opt/drivershub/HubBackend/config.json
+=== REDE ===
+$(ss -tuln | grep -E '7777|80|443' 2>&1)
 
-# Se der erro, corrija o JSON ou use backup:
-cp /opt/drivershub/HubBackend/old.config_sample.json /opt/drivershub/HubBackend/config.json
-# E reconfigure
-```
-
-**3. MySQL/Redis não rodando**
-```bash
-# Iniciar MySQL
-sudo systemctl start mysql
-sudo systemctl enable mysql
-
-# Iniciar Redis
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
+=== CONFIG (primeiras 20 linhas) ===
+$(python3 -m json.tool /opt/drivershub/HubBackend/config.json 2>/dev/null | head -20)
+EOF
+cat ~/diagnostico.txt
 ```
 
 ---
 
-### 🔴 Erro: "Can't connect to MySQL"
+## 🔴 Serviço não inicia
 
 ```bash
-# Verificar se MySQL está rodando
+# Ver o erro específico
+sudo journalctl -u drivershub-[SIGLA] -n 30 --no-pager
+```
+
+**Causa: Porta já em uso**
+```bash
+sudo lsof -i :7777         # Verificar quem usa a porta
+sudo kill -9 [PID]         # Encerrar o processo (se necessário)
+# Ou mudar a porta no config.json e reiniciar
+```
+
+**Causa: Erro no config.json**
+```bash
+python3 -m json.tool /opt/drivershub/HubBackend/config.json
+# Se der erro de sintaxe, restaure um backup:
+ls /opt/drivershub/backups/config_*.json
+cp /opt/drivershub/backups/config_YYYYMMDD_HHMMSS.json \
+   /opt/drivershub/HubBackend/config.json
+sudo systemctl restart drivershub-[SIGLA]
+```
+
+**Causa: MySQL ou Redis não rodando**
+```bash
+sudo systemctl start mysql        && sudo systemctl enable mysql
+sudo systemctl start redis-server && sudo systemctl enable redis-server
+sudo systemctl restart drivershub-[SIGLA]
+```
+
+**Causa: Dependências Python corrompidas**
+```bash
+# Use o modo reparo — não perde dados
+bash scripts/install-drivershub.sh
+# → Selecione: 1) Reparar instalação
+```
+
+---
+
+## 🔴 Erro: "Can't connect to MySQL"
+
+```bash
+# 1. Verificar se MySQL está rodando
 sudo systemctl status mysql
 
-# Se não estiver, iniciar
-sudo systemctl start mysql
-
-# Verificar usuário e senha
+# 2. Testar conexão manualmente
 mysql -u [SIGLA]_user -p [SIGLA]_db
-# Digite a senha configurada
 
-# Se falhar, recriar usuário:
+# 3. Se falhar, recriar usuário e permissões
 sudo mysql << EOF
 DROP USER IF EXISTS '[SIGLA]_user'@'localhost';
 CREATE USER '[SIGLA]_user'@'localhost' IDENTIFIED BY 'SUA_SENHA';
 GRANT ALL PRIVILEGES ON [SIGLA]_db.* TO '[SIGLA]_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-```
 
----
-
-### 🔴 Erro: "Connection refused" (Redis)
-
-```bash
-# Verificar Redis
-sudo systemctl status redis-server
-
-# Se não estiver rodando
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
-
-# Testar conexão
-redis-cli ping
-# Deve responder: PONG
-
-# Se não responder, reinstalar:
-sudo apt install --reinstall redis-server
-```
-
----
-
-### 🔴 Discord login não funciona
-
-**Passo 1: Verificar Redirect URI**
-```
-1. Acesse: https://discord.com/developers/applications
-2. Selecione sua aplicação
-3. Vá em OAuth2 > Redirects
-4. Adicione exatamente como está no seu servidor:
-   - Local: http://localhost:7777/[SIGLA]/api/auth/discord/callback
-   - Domínio: http://seudominio.com/[SIGLA]/api/auth/discord/callback
-   - SSL: https://seudominio.com/[SIGLA]/api/auth/discord/callback
-```
-
-**Passo 2: Verificar config.json**
-```bash
-# Verificar configurações Discord
-grep -A 5 "discord_" /opt/drivershub/HubBackend/config.json
-
-# Verificar domínio
-grep "domain" /opt/drivershub/HubBackend/config.json
-```
-
-**Passo 3: Verificar bot no servidor**
-```
-1. Bot deve estar online no seu servidor Discord
-2. Bot precisa de permissões de administrador
-3. Verificar Guild ID está correto
-```
-
-**Passo 4: Ver logs**
-```bash
-sudo journalctl -u drivershub-[SIGLA] -f
-# Tente fazer login novamente e observe os erros
-```
-
----
-
-### 🔴 Página não carrega / 502 Bad Gateway
-
-**Se usando Nginx:**
-```bash
-# Verificar se aplicação está rodando
-sudo systemctl status drivershub-[SIGLA]
-
-# Verificar Nginx
-sudo systemctl status nginx
-
-# Ver logs do Nginx
-sudo tail -30 /var/log/nginx/error.log
-
-# Testar configuração
-sudo nginx -t
-
-# Recarregar
-sudo systemctl reload nginx
-```
-
-**Se sem Nginx:**
-```bash
-# Verificar se porta está aberta
-sudo ss -tuln | grep 7777
-
-# Testar diretamente
-curl http://localhost:7777/[SIGLA]
-
-# Se falhar, ver logs do serviço
-sudo journalctl -u drivershub-[SIGLA] -n 50
-```
-
----
-
-### 🔴 Erro: "Permission Denied"
-
-```bash
-# Corrigir proprietário
-sudo chown -R $USER:$USER /opt/drivershub
-
-# Corrigir permissões
-chmod 755 /opt/drivershub/HubBackend
-chmod 600 /opt/drivershub/HubBackend/config.json
-
-# Corrigir permissões do venv
-cd /opt/drivershub/HubBackend
-chmod -R 755 venv/
-```
-
----
-
-### 🔴 Erro após atualização (git pull)
-
-```bash
-cd /opt/drivershub/HubBackend
-
-# Descartar alterações locais
-git reset --hard
-git clean -fd
-
-# Atualizar
-git pull
-
-# Reinstalar dependências
-source venv/bin/activate
-pip install -r requirements.txt --upgrade
-
-# Replicar correção do DATA DIRECTORY
-cd src
-sed -i "s/ DATA DIRECTORY = '{app.config.db_data_directory}'//g" db.py
-
-# Reiniciar
 sudo systemctl restart drivershub-[SIGLA]
 ```
 
 ---
 
-### 🔴 Erro: "Module not found"
+## 🔴 Credenciais Discord inválidas
+
+O instalador valida as credenciais antes de instalar. Se a validação falhou:
+
+**Bot Token inválido**
+```
+1. Acesse https://discord.com/developers/applications
+2. Selecione sua aplicação → Bot
+3. Clique em "Reset Token" e copie o novo token
+4. Rode: bash scripts/install-drivershub.sh → opção 1 (Reparar)
+   Ou edite: nano /opt/drivershub/HubBackend/config.json
+   Campo: "discord_bot_token"
+```
+
+**Client ID ou Client Secret inválido**
+```
+1. No portal: OAuth2 → General
+2. Copie o Client ID
+3. Clique em "Reset Secret" para gerar um novo secret
+4. Edite: nano /opt/drivershub/HubBackend/config.json
+   Campos: "discord_client_id" e "discord_client_secret"
+```
+
+**Steam API Key inválida**
+```
+1. Acesse https://steamcommunity.com/dev/apikey
+2. Registre um novo domínio e copie a chave
+3. Edite: nano /opt/drivershub/HubBackend/config.json
+   Campo: "steam_api_key"
+```
+
+Após editar o config.json:
+```bash
+sudo systemctl restart drivershub-[SIGLA]
+```
+
+---
+
+## 🔴 Discord login não funciona
+
+**Passo 1 — Verificar Redirect URI**
+```
+1. https://discord.com/developers/applications → sua app → OAuth2 → Redirects
+2. A URI deve ser EXATAMENTE:
+   https://seudominio.com/[SIGLA]/api/auth/discord/callback
+   (sem barra no final, com o protocolo correto)
+```
+
+**Passo 2 — Verificar config.json**
+```bash
+grep -E '"domain"|"prefix"|"discord_client_id"' \
+    /opt/drivershub/HubBackend/config.json
+```
+
+**Passo 3 — Verificar bot no servidor**
+```
+- O bot deve estar online no seu servidor Discord
+- Deve ter permissão de Administrator
+- O discord_guild_id deve corresponder ao ID do servidor correto
+```
+
+**Passo 4 — Ver logs em tempo real**
+```bash
+sudo journalctl -u drivershub-[SIGLA] -f
+# Agora tente fazer login e observe os erros
+```
+
+---
+
+## 🔴 Frontend não carrega / página em branco
+
+**Verificar se o build existe**
+```bash
+ls -la /var/www/drivershub-frontend/
+# Deve ter index.html e as pastas assets/
+```
+
+**Verificar Nginx**
+```bash
+sudo nginx -t                         # Testar configuração
+sudo systemctl reload nginx           # Recarregar
+sudo tail -30 /var/log/nginx/error.log # Ver erros
+```
+
+**Página em branco (SPA sem try_files)**
+```bash
+# Verificar se try_files está na config do Nginx
+grep try_files /etc/nginx/sites-available/drivershub-[SIGLA]
+# Se não estiver, reinstale o frontend:
+bash scripts/install-frontend.sh
+```
+
+**Frontend desatualizado após git pull**
+```bash
+bash scripts/update-drivershub.sh
+# → Selecione: Atualizar Frontend
+```
+
+---
+
+## 🔴 Nginx retorna 503 / "Frontend ainda não instalado"
+
+O backend foi instalado mas o frontend ainda não. Execute:
+
+```bash
+bash scripts/install-frontend.sh
+```
+
+---
+
+## 🔴 Página não carrega / 502 Bad Gateway
+
+```bash
+# Verificar se a aplicação está rodando
+sudo systemctl status drivershub-[SIGLA]
+
+# Verificar se a porta está aberta
+sudo ss -tuln | grep 7777
+
+# Testar a aplicação diretamente (sem Nginx)
+curl http://localhost:7777/[SIGLA]
+
+# Ver logs do Nginx
+sudo tail -30 /var/log/nginx/error.log
+```
+
+---
+
+## 🔴 Erro após atualização (git pull manual)
+
+```bash
+cd /opt/drivershub/HubBackend
+
+# Restaurar config.json de backup (se foi sobrescrito)
+ls /opt/drivershub/backups/
+cp /opt/drivershub/backups/config_YYYYMMDD_HHMMSS.json config.json
+
+# Reaplicar patch do DATA DIRECTORY
+cd src
+grep -q "DATA DIRECTORY" db.py && \
+    sed -i "s/ DATA DIRECTORY = '{app.config.db_data_directory}'//g" db.py
+
+# Reinstalar dependências
+source ../venv/bin/activate
+pip install -r ../requirements.txt -q
+deactivate
+
+sudo systemctl restart drivershub-[SIGLA]
+```
+
+> 💡 **Dica**: Use `bash scripts/update-drivershub.sh` — ele faz tudo isso automaticamente, inclusive o backup antes do pull.
+
+---
+
+## 🔴 Erro: "Permission Denied"
+
+```bash
+# Corrigir proprietário do diretório
+sudo chown -R "$USER":"$USER" /opt/drivershub
+
+# Corrigir permissões do config
+chmod 600 /opt/drivershub/HubBackend/config.json
+
+# Corrigir permissões do venv
+chmod -R 755 /opt/drivershub/HubBackend/venv/
+```
+
+---
+
+## 🔴 Erro: "Module not found" (Python)
 
 ```bash
 cd /opt/drivershub/HubBackend
@@ -214,210 +276,160 @@ cd /opt/drivershub/HubBackend
 rm -rf venv
 python3 -m venv venv
 source venv/bin/activate
+pip install --upgrade pip -q
+pip install -r requirements.txt -q
+deactivate
 
-# Reinstalar tudo
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Reiniciar
 sudo systemctl restart drivershub-[SIGLA]
 ```
 
 ---
 
-### 🔴 Banco de dados corrompido
+## 🔴 Banco de dados corrompido
 
 ```bash
-# Fazer backup primeiro!
-mysqldump -u [SIGLA]_user -p [SIGLA]_db > backup_emergency.sql
+# 1. Fazer backup de emergência (mesmo corrompido)
+mysqldump -u [SIGLA]_user -p [SIGLA]_db > ~/backup_emergency.sql
 
-# Opção 1: Reparar tabelas
+# 2. Tentar reparar as tabelas
 mysql -u [SIGLA]_user -p [SIGLA]_db << EOF
 REPAIR TABLE user;
 REPAIR TABLE dlog;
 REPAIR TABLE session;
 EOF
 
-# Opção 2: Recriar banco (PERDE DADOS!)
+# 3. Se não funcionar — recriar banco (PERDE TODOS OS DADOS)
 sudo mysql << EOF
 DROP DATABASE IF EXISTS [SIGLA]_db;
 CREATE DATABASE [SIGLA]_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON [SIGLA]_db.* TO '[SIGLA]_user'@'localhost';
+FLUSH PRIVILEGES;
 EOF
 
-# Reiniciar aplicação (recria tabelas)
+# A aplicação recria as tabelas automaticamente ao iniciar
 sudo systemctl restart drivershub-[SIGLA]
 ```
 
 ---
 
-### 🔴 Aplicação lenta
+## 🔴 Webhooks Discord não funcionam
 
-**1. Verificar uso de recursos**
 ```bash
-# CPU e RAM
-htop
+# Testar webhook manualmente
+curl -X POST "URL_DO_WEBHOOK" \
+    -H "Content-Type: application/json" \
+    -d '{"content": "Teste de webhook"}'
 
-# Espaço em disco
-df -h
-
-# Ver uso por processo
-top -p $(pgrep -f "drivershub")
+# URL deve começar com: https://discord.com/api/webhooks/
+# Verificar no config.json
+grep -A3 "webhook_url" /opt/drivershub/HubBackend/config.json
 ```
 
-**2. Otimizar banco de dados**
+---
+
+## 🔴 Aplicação lenta
+
 ```bash
-# Otimizar tabelas
+# Verificar uso de CPU e memória
+htop
+
+# Verificar disco
+df -h
+
+# Otimizar tabelas MySQL
 mysql -u [SIGLA]_user -p [SIGLA]_db << EOF
 OPTIMIZE TABLE user;
 OPTIMIZE TABLE dlog;
 OPTIMIZE TABLE session;
 EOF
 
-# Limpar logs antigos
+# Limpar sessões antigas (mais de 30 dias)
 mysql -u [SIGLA]_user -p [SIGLA]_db << EOF
-DELETE FROM session WHERE last_used_timestamp < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 30 DAY));
+DELETE FROM session
+WHERE last_used_timestamp < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 30 DAY));
 EOF
-```
 
-**3. Limpar Redis**
-```bash
+# Limpar cache Redis
 redis-cli FLUSHDB
 sudo systemctl restart drivershub-[SIGLA]
 ```
 
 ---
 
-### 🔴 Webhooks Discord não funcionam
+## 🚨 Procedimentos de Emergência
 
-**1. Verificar URLs**
+### Reiniciar tudo
+
 ```bash
-# Ver configuração de webhooks
-grep -A 5 "webhook_url" /opt/drivershub/HubBackend/config.json
-
-# Testar webhook manualmente
-curl -X POST "URL_DO_WEBHOOK" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Teste de webhook"}'
+sudo systemctl restart mysql
+sudo systemctl restart redis-server
+sudo systemctl restart drivershub-[SIGLA]
+sudo systemctl reload nginx
 ```
 
-**2. Verificar formato**
-- URL deve começar com: `https://discord.com/api/webhooks/`
-- Channel ID deve ser apenas números
-- Sem espaços ou quebras de linha
+### Resetar instalação sem perder banco
 
-**3. Recriar webhook**
+```bash
+# 1. Backup
+mysqldump -u [SIGLA]_user -p [SIGLA]_db > ~/banco_backup.sql
+cp /opt/drivershub/HubBackend/config.json ~/config_backup.json
+
+# 2. Reinstalar (opção 2 — nova instalação)
+bash scripts/install-drivershub.sh
+
+# 3. Restaurar banco (se necessário)
+mysql -u [SIGLA]_user -p [SIGLA]_db < ~/banco_backup.sql
 ```
-1. No Discord: Canal > Configurações > Integrações > Webhooks
-2. Deletar webhook antigo
-3. Criar novo
-4. Copiar URL completa
-5. Colar no config.json
-6. Reiniciar serviço
+
+### Modo debug (ver erros na tela)
+
+```bash
+sudo systemctl stop drivershub-[SIGLA]
+cd /opt/drivershub/HubBackend
+source venv/bin/activate
+python3 src/main.py --config config.json
+# Todos os erros aparecem aqui — Ctrl+C para parar
 ```
 
 ---
 
-## 🚨 Comandos de Emergência
+## ✅ Checklist de Debug
 
-### Resetar tudo (mantém banco de dados)
-
-```bash
-# Parar serviço
-sudo systemctl stop drivershub-[SIGLA]
-
-# Backup do config
-cp /opt/drivershub/HubBackend/config.json ~/config.json.backup
-
-# Backup do banco
-mysqldump -u [SIGLA]_user -p [SIGLA]_db > ~/banco_backup.sql
-
-# Deletar instalação
-sudo rm -rf /opt/drivershub
-
-# Executar instalador novamente
-./install-drivershub.sh
-
-# Restaurar banco (se necessário)
-mysql -u [SIGLA]_user -p [SIGLA]_db < ~/banco_backup.sql
 ```
-
-### Logs de debug completos
-
-```bash
-# Parar serviço
-sudo systemctl stop drivershub-[SIGLA]
-
-# Executar manualmente com debug
-cd /opt/drivershub/HubBackend
-source venv/bin/activate
-python3 src/main.py --config config.json
-
-# Ver todos os erros na tela
-# Pressione Ctrl+C para parar
-```
-
-### Verificar tudo de uma vez
-
-```bash
-# Usar script de verificação
-chmod +x verificar-instalacao.sh
-./verificar-instalacao.sh
+[ ] MySQL rodando?           sudo systemctl status mysql
+[ ] Redis rodando?           sudo systemctl status redis-server
+[ ] Nginx rodando?           sudo systemctl status nginx
+[ ] Serviço rodando?         sudo systemctl status drivershub-[SIGLA]
+[ ] config.json válido?      python3 -m json.tool /opt/drivershub/HubBackend/config.json
+[ ] Porta aberta?            ss -tuln | grep 7777
+[ ] Logs têm erro?           journalctl -u drivershub-[SIGLA] -n 30
+[ ] Banco acessível?         mysql -u [SIGLA]_user -p [SIGLA]_db
+[ ] Redis responde?          redis-cli ping
+[ ] Frontend existe?         ls /var/www/drivershub-frontend/index.html
+[ ] Nginx config OK?         sudo nginx -t
+[ ] Permissões corretas?     ls -la /opt/drivershub/HubBackend
 ```
 
 ---
 
 ## 📞 Quando pedir ajuda
 
-Se nada funcionar, colete estas informações antes de pedir ajuda:
+Compartilhe no Discord da comunidade o arquivo gerado por:
 
 ```bash
-# Informações do sistema
-cat << EOF > ~/diagnostico.txt
-=== SISTEMA ===
-$(uname -a)
-$(lsb_release -a)
-
-=== SERVICOS ===
-$(systemctl status drivershub-[SIGLA] --no-pager)
-$(systemctl status mysql --no-pager)
-$(systemctl status redis-server --no-pager)
-
-=== LOGS ===
-$(sudo journalctl -u drivershub-[SIGLA] -n 50 --no-pager)
-
-=== REDE ===
-$(ss -tuln | grep 7777)
-$(curl -I http://localhost:7777/[SIGLA] 2>&1)
-
-=== CONFIG ===
-$(python3 -m json.tool /opt/drivershub/HubBackend/config.json | head -30)
-EOF
-
-# Ver arquivo criado
-cat ~/diagnostico.txt
+bash scripts/verificar-instalacao.sh
 ```
 
-Envie o arquivo `diagnostico.txt` junto com sua dúvida no Discord da comunidade.
+Ou colete logs manualmente:
+
+```bash
+sudo journalctl -u drivershub-[SIGLA] -n 100 --no-pager > ~/logs_drivershub.txt
+cat ~/logs_drivershub.txt
+```
+
+**Comunidade**: https://discord.gg/wNTaaBZ5qd  
+**Wiki**: https://wiki.charlws.com/books/chub
 
 ---
 
-## ✅ Checklist de Debug
-
-Use esta lista para debug sistemático:
-
-```
-[ ] MySQL rodando?           sudo systemctl status mysql
-[ ] Redis rodando?             sudo systemctl status redis-server
-[ ] Serviço rodando?           sudo systemctl status drivershub-[SIGLA]
-[ ] config.json válido?        python3 -m json.tool config.json
-[ ] Porta aberta?              ss -tuln | grep 7777
-[ ] Logs têm erro?             journalctl -u drivershub-[SIGLA] -n 20
-[ ] Banco acessível?           mysql -u [SIGLA]_user -p [SIGLA]_db
-[ ] Redis responde?            redis-cli ping
-[ ] Permissões corretas?       ls -la /opt/drivershub/HubBackend
-[ ] Venv intacto?              ls /opt/drivershub/HubBackend/venv/bin
-```
-
----
-
-**📚 Para mais ajuda, consulte GUIA_INSTALACAO.md**
+**📚 Para o guia completo de instalação, consulte [GUIA_INSTALACAO.md](GUIA_INSTALACAO.md)**
