@@ -2,14 +2,14 @@
 
 ## 📋 Índice
 
-- [Sobre](##🎯Sobre)
-- [Requisitos](##💻Requisitos)
-- [Download](#download)
-- [Preparação](#preparação)
-- [Execução](#execução)
-- [Após a Instalação](#após-a-instalação)
-- [Solução de Problemas](#solução-de-problemas)
-- [Comandos Úteis](#comandos-úteis)
+- [Sobre](#-sobre)
+- [Requisitos](#-requisitos)
+- [Download](#-download)
+- [Preparação](#-preparação)
+- [Execução](#-execução)
+- [Após a Instalação](#-após-a-instalação)
+- [Solução de Problemas](#-solução-de-problemas)
+- [Comandos Úteis](#-comandos-úteis)
 
 ---
 
