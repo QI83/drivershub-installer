@@ -98,43 +98,89 @@ sudo systemctl restart drivershub-[SIGLA]
 
 ---
 
-## 🔴 Credenciais Discord inválidas
+## 🔴 Tela: "O DriversHub está enfrentando uma inoperância temporária"
 
-O instalador valida as credenciais antes de instalar. Se a validação falhou:
+Esta tela aparece quando o Frontend carrega mas não consegue buscar a configuração no backend.
+
+**Causa mais comum**: o plugin `client-config` não está ativado no backend.
+
+```bash
+# Verificar se client-config está nos external_plugins
+grep 'external_plugins' /opt/drivershub/HubBackend/config.json
+```
+
+Deve mostrar:
+```json
+"external_plugins": ["client-config"]
+```
+
+Se estiver vazio (`[]`), corrija:
+
+```bash
+# Editar config.json
+nano /opt/drivershub/HubBackend/config.json
+# Alterar: "external_plugins": []
+# Para:    "external_plugins": ["client-config"]
+
+# Reiniciar o serviço
+sudo systemctl restart drivershub-[SIGLA]
+```
+
+**Outras causas possíveis:**
+
+```bash
+# 1. Verificar se o backend está rodando
+sudo systemctl status drivershub-[SIGLA]
+
+# 2. Verificar se o endpoint responde
+curl http://localhost:7777/[SIGLA]/client/config/global
+# Deve retornar JSON, não erro 404 ou 500
+
+# 3. Ver logs do backend em tempo real
+sudo journalctl -u drivershub-[SIGLA] -f
+# Recarregue a página do browser e observe os erros
+```
+
+---
+
+## 🔴 Credenciais Discord ou Steam inválidas durante a instalação
+
+O instalador valida as credenciais antes de instalar e permite corrigi-las. Se a validação falhou **e você já instalou**:
 
 **Bot Token inválido**
-```
-1. Acesse https://discord.com/developers/applications
-2. Selecione sua aplicação → Bot
-3. Clique em "Reset Token" e copie o novo token
-4. Rode: bash scripts/install-drivershub.sh → opção 1 (Reparar)
-   Ou edite: nano /opt/drivershub/HubBackend/config.json
-   Campo: "discord_bot_token"
+```bash
+# 1. Obtenha um novo token em:
+#    https://discord.com/developers/applications → sua app → Bot → Reset Token
+
+# 2. Edite o config.json
+nano /opt/drivershub/HubBackend/config.json
+# Altere o campo: "discord_bot_token"
+
+# 3. Reinicie
+sudo systemctl restart drivershub-[SIGLA]
 ```
 
 **Client ID ou Client Secret inválido**
-```
-1. No portal: OAuth2 → General
-2. Copie o Client ID
-3. Clique em "Reset Secret" para gerar um novo secret
-4. Edite: nano /opt/drivershub/HubBackend/config.json
-   Campos: "discord_client_id" e "discord_client_secret"
+```bash
+# 1. Portal: https://discord.com/developers/applications → OAuth2 → General
+# 2. Edite:
+nano /opt/drivershub/HubBackend/config.json
+# Altere: "discord_client_id" e "discord_client_secret"
+sudo systemctl restart drivershub-[SIGLA]
 ```
 
 **Steam API Key inválida**
-```
-1. Acesse https://steamcommunity.com/dev/apikey
-2. Registre um novo domínio e copie a chave
-3. Edite: nano /opt/drivershub/HubBackend/config.json
-   Campo: "steam_api_key"
-```
-
-Após editar o config.json:
 ```bash
+# 1. Gere uma nova em: https://steamcommunity.com/dev/apikey
+# 2. Edite:
+nano /opt/drivershub/HubBackend/config.json
+# Altere: "steam_api_key"
 sudo systemctl restart drivershub-[SIGLA]
 ```
 
 ---
+
+
 
 ## 🔴 Discord login não funciona
 
