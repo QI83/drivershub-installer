@@ -1,572 +1,430 @@
-# 🚚 Guia de Instalação Automatizada - Drivers Hub
+# 🚚 Guia de Instalação — Drivers Hub
 
 ## 📋 Índice
 
 - [Sobre](#-sobre)
 - [Requisitos](#-requisitos)
-- [Download](#-download)
 - [Preparação](#-preparação)
-- [Execução](#-execução)
-- [Após a Instalação](#-após-a-instalação)
-- [Solução de Problemas](#-solução-de-problemas)
+- [Passo 1 — Backend](#-passo-1--backend)
+- [Passo 2 — Frontend](#-passo-3--frontend)
+- [Pós-Instalação](#-pós-instalação)
+- [Atualizar](#-atualizando)
+- [Desinstalar](#-desinstalando)
+- [Modo Reparo](#-modo-reparo)
 - [Comandos Úteis](#-comandos-úteis)
+- [Segurança](#-segurança)
+- [Checklist](#-checklist-pós-instalação)
 
 ---
 
 ## 🎯 Sobre
 
-Este script automatiza completamente a instalação do **Drivers Hub Backend** para transportadoras virtuais de Euro Truck Simulator 2 e American Truck Simulator.
+Este projeto automatiza completamente a instalação do **Drivers Hub** — Backend e Frontend — para transportadoras virtuais de Euro Truck Simulator 2 e American Truck Simulator.
 
-### ✨ O que o script faz automaticamente:
+### O que é instalado automaticamente
 
-✅ Instala todas as dependências necessárias (Python, MySQL, Redis)  
-✅ Clona e configura o repositório do Drivers Hub  
-✅ Cria e configura o banco de dados  
-✅ Gera o arquivo `config.json` personalizado  
-✅ Aplica correções necessárias no código  
-✅ Configura serviço systemd para inicialização automática  
-✅ Instala e configura Nginx (opcional)  
-✅ Configura SSL/HTTPS com Let's Encrypt (opcional)  
+**Backend:**
+- Python 3 com ambiente virtual e dependências
+- MySQL com banco de dados e usuário configurados
+- Redis para cache e sessões
+- HubBackend clonado e configurado
+- Serviço systemd com restart automático
+- Nginx como proxy reverso *(opcional)*
+- SSL/HTTPS com Let's Encrypt *(opcional)*
+
+**Frontend:**
+- Node.js 20+ via NodeSource
+- HubFrontend clonado e compilado
+- Arquivos estáticos em `/var/www/drivershub-frontend/`
+- Roteamento SPA configurado no Nginx
 
 ---
 
 ## 💻 Requisitos
 
 ### Sistema Operacional
-- **Ubuntu 20.04 ou superior** (recomendado)
-- **Debian 11 ou superior**
-- Outras distribuições baseadas em Debian/Ubuntu podem funcionar
+- **Ubuntu 20.04+** *(recomendado)*
+- **Debian 11+**
 
-### Hardware Mínimo
-- **CPU**: 2 cores
-- **RAM**: 2 GB
+### Hardware
+- **CPU**: 2 cores mínimo
+- **RAM**: 2 GB mínimo
 - **Disco**: 10 GB livres
-- **Rede**: Conexão com internet
+- **Rede**: Conexão estável com internet
 
 ### Acesso
-- ⚠️ **NÃO execute como root!** Use um usuário normal com sudo
-- Acesso SSH (se for servidor remoto)
-
-### Informações Necessárias
-
-Antes de executar o script, tenha em mãos:
-
-#### 🎮 Discord Developer Portal
-1. Acesse: https://discord.com/developers/applications
-2. Crie uma nova aplicação
-3. Anote:
-   - **Client ID**
-   - **Client Secret** (em OAuth2)
-   - **Bot Token** (crie um bot em "Bot")
-   - **Server/Guild ID** do seu servidor Discord
-
-#### 🎮 Steam API
-1. Acesse: https://steamcommunity.com/dev/apikey
-2. Registre seu domínio (ou use `localhost` para testes)
-3. Anote a **API Key**
-
-#### 📋 Informações da VTC
-- Nome completo da transportadora
-- Abreviação (sigla, ex: "cdmp")
-- Domínio (se tiver, ou deixe vazio para localhost)
-- Senha para o banco de dados
-
----
-
-## 📥 Download
-
-### Opção 1: Download direto
+> ⚠️ **NÃO execute como root!** Use um usuário normal com `sudo`.
 
 ```bash
-# Baixar o script
-wget https://raw.githubusercontent.com/SEU_REPO/install-drivershub.sh
+# Verificar seu usuário atual
+whoami
 
-# Dar permissão de execução
-chmod +x install-drivershub.sh
+# Se estiver como root, crie um usuário:
+adduser seuusuario
+usermod -aG sudo seuusuario
+su - seuusuario
 ```
 
-### Opção 2: Clone manual
+### Informações necessárias
 
-```bash
-# Criar diretório
-mkdir -p ~/drivershub-installer
-cd ~/drivershub-installer
+**Discord Developer Portal** — [discord.com/developers/applications](https://discord.com/developers/applications)
 
-# Copiar o script para este diretório
-# (cole o conteúdo do arquivo install-drivershub.sh)
-nano install-drivershub.sh
+| Campo | Onde encontrar |
+|---|---|
+| Client ID | Página principal da aplicação |
+| Client Secret | OAuth2 → General |
+| Bot Token | Bot → Reset Token |
+| Server (Guild) ID | No Discord: clique direito no servidor → Copiar ID |
 
-# Dar permissão de execução
-chmod +x install-drivershub.sh
-```
+**Steam** — [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)
+
+| Campo | Onde encontrar |
+|---|---|
+| API Key | Preencha o domínio e clique em "Register" |
+
+**Dados da VTC**
+
+| Campo | Exemplo |
+|---|---|
+| Nome completo | CDMP Express |
+| Abreviação (sigla) | cdmp |
+| Domínio | hub.minhaVTC.com *(deixe vazio para localhost)* |
 
 ---
 
 ## 🔧 Preparação
 
-### 1. Atualizar o Sistema
+### 1. Atualizar o sistema
 
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-### 2. Verificar Usuário
-
-⚠️ **Importante**: Certifique-se de estar usando um usuário **normal** (não root):
+### 2. Clonar o instalador
 
 ```bash
-# Verificar usuário atual
-whoami
-
-# Se estiver como root, crie um usuário:
-# adduser seuusuario
-# usermod -aG sudo seuusuario
-# su - seuusuario
+git clone https://github.com/QI83/drivershub-installer.git
+cd drivershub-installer
 ```
 
-### 3. Preparar Informações
+### 3. Organizar suas credenciais
 
-Organize as informações necessárias em um arquivo de texto:
-
-```bash
-nano ~/info-instalacao.txt
-```
-
-Cole e preencha:
+Antes de executar o script, anote tudo em um arquivo seguro:
 
 ```
-NOME DA VTC: 
-ABREVIAÇÃO: 
-DOMÍNIO (ou localhost): 
+NOME DA VTC:
+ABREVIAÇÃO:
+DOMÍNIO (ou deixe em branco):
 PORTA: 7777
 
 === DISCORD ===
-Client ID: 
-Client Secret: 
-Bot Token: 
-Server ID: 
+Client ID:
+Client Secret:
+Bot Token:
+Server ID:
 
 === STEAM ===
-API Key: 
+API Key:
 
 === BANCO DE DADOS ===
-Senha desejada: 
+Senha desejada:
 ```
 
 ---
 
-## 🚀 Execução
-
-### Passo 1: Executar o Script
+## 🚀 Passo 1 — Backend
 
 ```bash
-./install-drivershub.sh
+bash scripts/install-drivershub.sh
 ```
 
-### Passo 2: Seguir as Instruções
+### Etapas do script
 
-O script irá guiá-lo através de várias etapas:
+```
+[PASSO 1/10] Verificando requisitos do sistema
+[PASSO 2/10] Coletando informações da instalação  ← você preenche aqui
+[PASSO 2/10] Validando credenciais Discord e Steam ← automático
+[PASSO 3/10] Instalando dependências do sistema
+[PASSO 4/10] Instalando e configurando MySQL
+[PASSO 5/10] Instalando e configurando Redis
+[PASSO 6/10] Clonando repositório do Drivers Hub
+[PASSO 7/10] Configurando ambiente Python
+[PASSO 8/10] Aplicando correção no código
+[PASSO 9/10] Criando arquivo de configuração
+[PASSO 10/10] Configurando serviço systemd
+```
 
-#### 📋 Etapa 1: Informações da VTC
+### Validação de credenciais
+
+O script valida automaticamente suas credenciais **antes** de iniciar a instalação:
+
+- ✅ **Discord Bot Token** — testa via `GET /users/@me`
+- ✅ **Discord Client ID + Secret** — testa via `GET /oauth2/applications/@me`
+- ✅ **Steam API Key** — testa via `GetSupportedAPIList`
+
+Se alguma credencial estiver inválida, o script avisa e oferece a opção de corrigir antes de continuar — evitando instalar tudo e só descobrir o problema no login.
+
+### Exemplo de preenchimento
+
 ```
 Nome completo da VTC: CDMP Express
 Abreviação da VTC (ex: cdmp): cdmp
-Domínio (deixe vazio para localhost): [Enter para localhost]
-Porta do servidor [7777]: [Enter para usar 7777]
-```
+Domínio (deixe vazio para localhost): hub.minhaVTC.com
+Porta do servidor [7777]: [Enter]
 
-#### 🔐 Etapa 2: Banco de Dados
-```
-Senha para o banco de dados MySQL: ********
-Confirme a senha: ********
-```
+Senha para o banco de dados MySQL: ************
+Confirme a senha: ************
 
-💡 **Dica**: Use uma senha forte! O script validará se as senhas coincidem.
-
-#### 🎮 Etapa 3: Discord & Steam
-```
 Discord Client ID: 1467955638989623468
 Discord Client Secret: FnhXn1dZxDEi1YvkVBq954kVpan454Et
 Discord Bot Token: MTQ2Nzk1NTYzODk4OTYyMzQ2OA.G1EIDK...
 Discord Server (Guild) ID: 1465781784728830192
 Steam API Key: DE8C49E18E84FF620514813E035F4BC5
+
+Deseja instalar e configurar Nginx? [s/N]: s
+Deseja configurar SSL/HTTPS? [s/N]: s
 ```
 
-💡 **Dica**: Copie e cole diretamente do Discord/Steam Developer Portal.
+### Detecção de instalação existente
 
-#### ⚙️ Etapa 4: Configurações Opcionais
-```
-Deseja instalar e configurar Nginx como proxy reverso? [s/N]: s
-Deseja configurar SSL/HTTPS com Let's Encrypt? [s/N]: s
-```
-
-- **Nginx**: Recomendado se você tem um domínio
-- **SSL**: Necessário para HTTPS (só funciona com domínio real)
-
-#### 📊 Etapa 5: Confirmação
-
-O script mostrará um resumo. Revise tudo e confirme:
+Se o script detectar uma instalação anterior, exibirá um menu:
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VTC: CDMP Express (cdmp)
-Domínio: localhost:7777
-Porta: 7777
-Banco de dados: MySQL (senha configurada)
-Discord: 14679556...
-Steam: DE8C49E1...
-Nginx: y
-SSL: n
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  INSTALAÇÃO EXISTENTE DETECTADA!
 
-Confirma as informações acima e deseja continuar? [s/N]: s
+  VTC:          CDMP Express (cdmp)
+  Serviço:      ✅ Rodando
+
+O que deseja fazer?
+  1) Reparar instalação   — corrige dependências sem apagar dados
+  2) Nova instalação      — APAGA tudo e instala do zero
+  3) Cancelar
 ```
 
-### Passo 3: Aguardar
+**Use opção 1 (Reparar)** quando:
+- O serviço parou de funcionar
+- Dependências Python estão corrompidas
+- Você quer reaplicar patches sem perder dados
 
-O script executará automaticamente:
-
-```
-[PASSO 3/10] ✅ Instalando dependências do sistema
-[PASSO 4/10] ✅ Instalando e configurando MySQL
-[PASSO 5/10] ✅ Instalando e configurando Redis
-[PASSO 6/10] ✅ Clonando repositório do Drivers Hub
-[PASSO 7/10] ✅ Configurando ambiente Python
-[PASSO 8/10] ✅ Aplicando correção no código
-[PASSO 9/10] ✅ Criando arquivo de configuração
-[PASSO 10/10] ✅ Configurando serviço systemd
-```
-
-⏱️ **Tempo estimado**: 5-15 minutos (dependendo da conexão e hardware)
+**Use opção 2 (Nova instalação)** quando:
+- Quer mudar o domínio, sigla ou senha
+- Quer recomeçar do zero
 
 ---
 
-## ✅ Após a Instalação
-
-### 1. Verificar Status
+## 🎨 Passo 2 — Frontend
 
 ```bash
-sudo systemctl status drivershub-cdmp
+bash scripts/install-frontend.sh
 ```
 
-Deve mostrar: `Active: active (running)`
+O script lê automaticamente as configurações salvas pelo backend em `/opt/drivershub/.installer_state` — você não precisa digitar o domínio ou sigla novamente.
 
-### 2. Configurar Discord Redirect URI
+```
+[PASSO 1/6] Verificando pré-requisitos
+[PASSO 2/6] Verificando / instalando Node.js
+[PASSO 3/6] Configurando variáveis do frontend
+[PASSO 4/6] Clonando repositório e fazendo build
+[PASSO 5/6] Fazendo deploy no Nginx
+[PASSO 6/6] Verificando instalação
+```
 
-1. Acesse: https://discord.com/developers/applications
-2. Selecione sua aplicação
-3. Vá em **OAuth2 > Redirects**
-4. Adicione a URL:
-   - Sem domínio: `http://localhost:7777/cdmp/api/auth/discord/callback`
-   - Com domínio: `http://seudominio.com/cdmp/api/auth/discord/callback`
-   - Com SSL: `https://seudominio.com/cdmp/api/auth/discord/callback`
-5. Salve as alterações
-
-### 3. Convidar o Bot Discord
-
-1. No Discord Developer Portal, vá em **OAuth2 > URL Generator**
-2. Selecione os scopes:
-   - ✅ `bot`
-   - ✅ `applications.commands`
-3. Selecione as permissões:
-   - ✅ Administrator (recomendado)
-4. Copie a URL gerada e abra no navegador
-5. Selecione seu servidor e confirme
-
-### 4. Acessar a Interface Web
-
-Abra seu navegador e acesse:
-
-- **Sem domínio**: `http://localhost:7777/cdmp`
-- **Com domínio**: `http://seudominio.com`
-- **Com SSL**: `https://seudominio.com`
-
-### 5. Fazer Primeiro Login
-
-1. Clique em **"Login com Discord"**
-2. Autorize a aplicação
-3. Você será redirecionado de volta ao Drivers Hub
-4. Configure seu perfil e cargos no painel administrativo
+A `VITE_CONFIG_URL` é calculada automaticamente com base no domínio e sigla configurados no backend. O script mostra a URL gerada e pede confirmação antes de prosseguir.
 
 ---
 
-## 🔧 Configurações Adicionais
+## ✅ Pós-Instalação
 
-### Configurar Webhooks do Discord
+### 1. Verificar o status
 
-Para receber notificações de entregas, candidaturas, etc:
+```bash
+bash scripts/verificar-instalacao.sh
+```
 
-1. No seu servidor Discord, vá em um canal
-2. Configurações do Canal > Integrações > Webhooks
-3. Criar Webhook
-4. Copie a URL do webhook
-5. Edite o arquivo de configuração:
+### 2. Configurar o Discord Redirect URI
+
+No [Discord Developer Portal](https://discord.com/developers/applications):
+
+1. Selecione sua aplicação
+2. Vá em **OAuth2 → Redirects**
+3. Adicione:
+
+```
+https://seudominio.com/[SIGLA]/api/auth/discord/callback
+```
+
+### 3. Convidar o bot
+
+1. No portal: **OAuth2 → URL Generator**
+2. Escopos: `bot` + `applications.commands`
+3. Permissões: `Administrator`
+4. Abra a URL gerada no navegador e selecione seu servidor
+
+### 4. Acessar o sistema
+
+| Situação | URL |
+|---|---|
+| Com domínio + SSL | `https://seudominio.com/` |
+| Com domínio sem SSL | `http://seudominio.com/` |
+| Sem Nginx | `http://localhost:7777/[sigla]` |
+
+### 5. Primeiro login
+
+1. Clique em **Login com Discord**
+2. Autorize a aplicação
+3. Configure perfil e cargos no painel administrativo
+
+### 6. Configurar webhooks Discord *(opcional)*
 
 ```bash
 nano /opt/drivershub/HubBackend/config.json
 ```
 
-Encontre e edite:
-
 ```json
 "hook_delivery_log": {
     "channel_id": "ID_DO_CANAL",
-    "webhook_url": "URL_DO_WEBHOOK_AQUI"
+    "webhook_url": "https://discord.com/api/webhooks/..."
 }
 ```
 
-6. Reinicie o serviço:
-
 ```bash
-sudo systemctl restart drivershub-cdmp
+sudo systemctl restart drivershub-[SIGLA]
 ```
 
-### Configurar IDs dos Cargos Discord
+### 7. Configurar IDs dos cargos Discord *(opcional)*
 
-Para sincronizar cargos entre Discord e Drivers Hub:
-
-1. No Discord, ative o Modo Desenvolvedor:
-   - Configurações > Avançado > Modo Desenvolvedor
-2. Clique com botão direito em um cargo > Copiar ID
-3. Edite o config.json:
+1. Discord → Configurações → Avançado → **Modo Desenvolvedor** (ativar)
+2. Clique direito no cargo → **Copiar ID**
+3. Edite o `config.json`:
 
 ```json
 "roles": [
-    {
-        "roleid": 1,
-        "name": "Diretor",
-        "discordrole": "ID_DO_CARGO_AQUI",
-        "permissions": ["admin"]
-    }
+    {"roleid": 1, "name": "Diretor", "discordrole": "ID_DO_CARGO", "permissions": ["admin"]}
 ]
 ```
 
 ---
 
-## 🆘 Solução de Problemas
-
-### Serviço não inicia
+## 🔄 Atualizando
 
 ```bash
-# Ver logs completos
-sudo journalctl -u drivershub-cdmp -n 100
-
-# Ver status detalhado
-sudo systemctl status drivershub-cdmp -l
+bash scripts/update-drivershub.sh
 ```
 
-**Causas comuns:**
-- ❌ Porta já em uso
-- ❌ Erro no config.json
-- ❌ MySQL/Redis não rodando
+O script pergunta o que atualizar (backend, frontend ou ambos), faz **backup automático** do `config.json` e `.env.production`, executa `git pull`, e restaura as suas configurações após o pull — o `git pull` nunca vai sobrescrever seus dados.
 
-**Solução:**
-```bash
-# Verificar portas
-sudo lsof -i :7777
+---
 
-# Verificar MySQL
-sudo systemctl status mysql
-
-# Verificar Redis
-sudo systemctl status redis-server
-
-# Validar config.json
-cd /opt/drivershub/HubBackend
-python3 -m json.tool config.json
-```
-
-### Erro de conexão com banco de dados
+## 🗑️ Desinstalando
 
 ```bash
-# Testar conexão manualmente
-mysql -u cdmp_user -p cdmp_db
-
-# Verificar usuário e banco
-sudo mysql -e "SHOW DATABASES;"
-sudo mysql -e "SELECT User, Host FROM mysql.user;"
+bash scripts/uninstall-drivershub.sh
 ```
 
-**Recriar banco e usuário:**
-```bash
-sudo mysql << EOF
-DROP DATABASE IF EXISTS cdmp_db;
-DROP USER IF EXISTS 'cdmp_user'@'localhost';
-CREATE DATABASE cdmp_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'cdmp_user'@'localhost' IDENTIFIED BY 'sua_senha';
-GRANT ALL PRIVILEGES ON cdmp_db.* TO 'cdmp_user'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-```
+Cada etapa tem confirmação individual. O banco de dados exige uma confirmação extra por ser irreversível. MySQL, Redis, Nginx e Node.js são preservados pois podem estar em uso por outros projetos.
 
-### Discord login não funciona
+---
 
-1. **Verificar Redirect URI** no Discord Developer Portal
-2. **Verificar domínio** no config.json
-3. **Verificar bot** está no servidor
-4. **Ver logs**:
-```bash
-sudo journalctl -u drivershub-cdmp -f
-```
+## 🔨 Modo Reparo
 
-### Página não carrega
+Se a instalação estiver com problema (serviço caindo, dependências corrompidas, Nginx com erro):
 
 ```bash
-# Verificar se serviço está rodando
-sudo systemctl status drivershub-cdmp
-
-# Verificar logs do Nginx (se instalado)
-sudo tail -f /var/log/nginx/error.log
-
-# Testar porta diretamente
-curl http://localhost:7777/cdmp
+bash scripts/install-drivershub.sh
+# → Escolha: 1) Reparar instalação
 ```
 
-### Erro "Permission Denied"
-
-```bash
-# Corrigir permissões
-sudo chown -R $USER:$USER /opt/drivershub
-
-# Recriar ambiente virtual se necessário
-cd /opt/drivershub/HubBackend
-rm -rf venv
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+O que o reparo faz:
+- Recarrega variáveis do `config.json` existente
+- Reinstala dependências Python
+- Reaplicar patch do DATA DIRECTORY se necessário
+- Reinicia o serviço
+- **Não altera o `config.json` nem o banco de dados**
 
 ---
 
 ## 📝 Comandos Úteis
 
-### Gerenciamento do Serviço
+### Backend
 
 ```bash
-# Ver status
-sudo systemctl status drivershub-cdmp
+# Status e logs
+sudo systemctl status drivershub-[SIGLA]
+sudo journalctl -u drivershub-[SIGLA] -f
+sudo journalctl -u drivershub-[SIGLA] -n 100
 
-# Iniciar
-sudo systemctl start drivershub-cdmp
+# Controle do serviço
+sudo systemctl start   drivershub-[SIGLA]
+sudo systemctl stop    drivershub-[SIGLA]
+sudo systemctl restart drivershub-[SIGLA]
 
-# Parar
-sudo systemctl stop drivershub-cdmp
+# Após editar config.json
+sudo systemctl restart drivershub-[SIGLA]
 
-# Reiniciar
-sudo systemctl restart drivershub-cdmp
-
-# Recarregar configuração (após editar config.json)
-sudo systemctl restart drivershub-cdmp
-
-# Desabilitar inicialização automática
-sudo systemctl disable drivershub-cdmp
-
-# Habilitar inicialização automática
-sudo systemctl enable drivershub-cdmp
+# Modo debug manual
+sudo systemctl stop drivershub-[SIGLA]
+cd /opt/drivershub/HubBackend
+source venv/bin/activate
+python3 src/main.py --config config.json
 ```
 
-### Logs
-
-```bash
-# Ver logs em tempo real
-sudo journalctl -u drivershub-cdmp -f
-
-# Ver últimas 100 linhas
-sudo journalctl -u drivershub-cdmp -n 100
-
-# Ver logs desde hoje
-sudo journalctl -u drivershub-cdmp --since today
-
-# Buscar erro específico
-sudo journalctl -u drivershub-cdmp | grep ERROR
-```
-
-### Banco de Dados
+### MySQL
 
 ```bash
 # Acessar banco
-mysql -u cdmp_user -p cdmp_db
+mysql -u [SIGLA]_user -p [SIGLA]_db
 
-# Backup do banco
-mysqldump -u cdmp_user -p cdmp_db > backup_$(date +%Y%m%d).sql
+# Backup
+mysqldump -u [SIGLA]_user -p [SIGLA]_db > backup_$(date +%Y%m%d).sql
 
-# Restaurar backup
-mysql -u cdmp_user -p cdmp_db < backup_20260217.sql
+# Restaurar
+mysql -u [SIGLA]_user -p [SIGLA]_db < backup_YYYYMMDD.sql
 
-# Ver tabelas
-mysql -u cdmp_user -p cdmp_db -e "SHOW TABLES;"
-
-# Ver estatísticas
-mysql -u cdmp_user -p cdmp_db -e "SELECT COUNT(*) FROM user;"
+# Verificar banco
+sudo mysql -e "SHOW DATABASES;"
+sudo mysql -e "SELECT User, Host FROM mysql.user;"
 ```
 
-### Atualização
+### Nginx
 
 ```bash
-# Parar serviço
-sudo systemctl stop drivershub-cdmp
+sudo nginx -t                          # Testar configuração
+sudo systemctl reload nginx            # Recarregar
+sudo tail -f /var/log/nginx/error.log  # Logs de erro
+sudo tail -f /var/log/nginx/access.log # Logs de acesso
+```
 
-# Atualizar código
-cd /opt/drivershub/HubBackend
+### Frontend (atualização manual)
+
+```bash
+cd /opt/drivershub/HubFrontend
 git pull
-
-# Atualizar dependências
-source venv/bin/activate
-pip install -r requirements.txt --upgrade
-
-# Reiniciar
-sudo systemctl start drivershub-cdmp
-```
-
-### Nginx (se instalado)
-
-```bash
-# Ver status
-sudo systemctl status nginx
-
-# Testar configuração
-sudo nginx -t
-
-# Recarregar configuração
+npm ci
+npm run build
+sudo rsync -a --delete build/ /var/www/drivershub-frontend/
 sudo systemctl reload nginx
-
-# Ver logs de erro
-sudo tail -f /var/log/nginx/error.log
-
-# Ver logs de acesso
-sudo tail -f /var/log/nginx/access.log
 ```
 
 ---
 
 ## 🔒 Segurança
 
-### Firewall (Recomendado)
+### Firewall
 
 ```bash
-# Instalar UFW
 sudo apt install -y ufw
 
-# Permitir SSH (IMPORTANTE!)
-sudo ufw allow 22/tcp
+sudo ufw allow 22/tcp    # SSH — obrigatório!
+sudo ufw allow 80/tcp    # HTTP
+sudo ufw allow 443/tcp   # HTTPS
 
-# Permitir HTTP/HTTPS
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Ou permitir apenas a porta do app (sem Nginx)
-sudo ufw allow 7777/tcp
-
-# Ativar firewall
 sudo ufw enable
-
-# Ver status
 sudo ufw status
 ```
 
-### Backups Automáticos
+### Backups automáticos
 
-Criar script de backup:
+Crie um script de backup e agende via cron:
 
 ```bash
 nano ~/backup-drivershub.sh
@@ -574,20 +432,23 @@ nano ~/backup-drivershub.sh
 
 ```bash
 #!/bin/bash
+SIGLA="cdmp"
 DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/home/$USER/backups"
+BACKUP_DIR="/opt/drivershub/backups"
 
-mkdir -p $BACKUP_DIR
+mkdir -p "$BACKUP_DIR"
 
-# Backup banco de dados
-mysqldump -u cdmp_user -p'SENHA_AQUI' cdmp_db > $BACKUP_DIR/db_$DATE.sql
+# Backup banco
+mysqldump -u "${SIGLA}_user" -p'SUA_SENHA' "${SIGLA}_db" \
+    > "${BACKUP_DIR}/db_${DATE}.sql"
 
 # Backup config
-cp /opt/drivershub/HubBackend/config.json $BACKUP_DIR/config_$DATE.json
+cp /opt/drivershub/HubBackend/config.json \
+   "${BACKUP_DIR}/config_${DATE}.json"
 
 # Manter apenas últimos 7 dias
-find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
-find $BACKUP_DIR -name "*.json" -mtime +7 -delete
+find "$BACKUP_DIR" -name "*.sql"  -mtime +7 -delete
+find "$BACKUP_DIR" -name "*.json" -mtime +7 -delete
 
 echo "Backup concluído: $DATE"
 ```
@@ -595,92 +456,38 @@ echo "Backup concluído: $DATE"
 ```bash
 chmod +x ~/backup-drivershub.sh
 
-# Adicionar ao cron (backup diário às 3h)
+# Agendar backup diário às 3h
 crontab -e
-```
-
-Adicione:
-```
-0 3 * * * /home/seuusuario/backup-drivershub.sh
+# Adicionar:
+# 0 3 * * * /home/seuusuario/backup-drivershub.sh >> /opt/drivershub/backup.log 2>&1
 ```
 
 ---
 
-## 📚 Recursos Adicionais
+## ✅ Checklist Pós-Instalação
 
-### Documentação Oficial
-- **Wiki**: https://wiki.charlws.com/books/chub
-- **API Docs**: http://localhost:7777/cdmp/docs (após instalação)
+```
+[ ] Backend rodando       sudo systemctl status drivershub-[SIGLA]
+[ ] Frontend acessível    curl -s -o /dev/null -w "%{http_code}" http://localhost
+[ ] Redirect URI Discord  configurado no Developer Portal
+[ ] Bot Discord           convidado e online no servidor
+[ ] Login Discord         funcionando no navegador
+[ ] Cargos Discord        sincronizados no painel
+[ ] Webhooks Discord      configurados (opcional)
+[ ] Firewall              ufw status
+[ ] Backup automático     crontab -l
+[ ] SSL/HTTPS             certbot certificates (se aplicável)
+```
 
-### Comunidade
-- **Discord Oficial**: https://discord.gg/wNTaaBZ5qd
+---
+
+## 📚 Recursos
+
+- **Wiki oficial**: https://wiki.charlws.com/books/chub
+- **API docs**: `https://seudominio.com/[sigla]/docs` *(após instalação)*
+- **Discord da comunidade**: https://discord.gg/wNTaaBZ5qd
 - **Site**: https://drivershub.charlws.com
 
-### Plugins e Extensões
-- **TruckSim Tracker**: Para rastreamento automático de entregas
-- **Plugins Adicionais**: Verifique a documentação oficial
-
 ---
 
-## 🎯 Checklist Pós-Instalação
-
-Use esta checklist para garantir que tudo está configurado:
-
-- [ ] ✅ Serviço rodando (`systemctl status drivershub-cdmp`)
-- [ ] ✅ Página web acessível
-- [ ] ✅ Redirect URI configurado no Discord
-- [ ] ✅ Bot Discord convidado e online
-- [ ] ✅ Login com Discord funcionando
-- [ ] ✅ Perfil de administrador configurado
-- [ ] ✅ Cargos Discord sincronizados
-- [ ] ✅ Webhooks configurados (opcional)
-- [ ] ✅ Firewall configurado (recomendado)
-- [ ] ✅ Backup automático configurado (recomendado)
-- [ ] ✅ SSL/HTTPS funcionando (se aplicável)
-
----
-
-## 💡 Dicas e Boas Práticas
-
-### Performance
-- Use SSD se possível
-- Para muitos usuários (100+), considere aumentar RAM
-- Configure cache no Redis se necessário
-
-### Manutenção
-- Faça backups regulares do banco de dados
-- Monitore logs regularmente
-- Mantenha o sistema atualizado
-- Documente alterações de configuração
-
-### Segurança
-- Use senhas fortes
-- Mantenha as chaves secretas seguras
-- Configure firewall
-- Use SSL em produção
-- Monitore tentativas de acesso suspeitas
-
----
-
-## 📞 Suporte
-
-Se você encontrar problemas não listados aqui:
-
-1. **Verifique os logs**: `sudo journalctl -u drivershub-cdmp -n 100`
-2. **Consulte a Wiki**: https://wiki.charlws.com/books/chub
-3. **Discord da Comunidade**: https://discord.gg/wNTaaBZ5qd
-4. **GitHub Issues**: Reporte bugs no repositório oficial
-
----
-
-## 📄 Licença
-
-Este guia e script são fornecidos "como estão", sem garantias.
-
-O **Drivers Hub** é copyright © 2022-2026 CharlesWithC, licenciado sob AGPL-3.0.
-
----
-
-**Criado com ❤️ para a comunidade de transportadoras virtuais de ETS2/ATS**
-
-🚚 Boa sorte com sua VTC! 🚛
+**Criado com ❤️ para a comunidade de transportadoras virtuais ETS2/ATS 🚚**
