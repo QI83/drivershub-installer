@@ -87,11 +87,12 @@ echo ""
 
 echo -e "${BLUE}[3/8] Banco de Dados${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-check_item "MariaDB instalado" "command -v mysql"
-check_item "MariaDB rodando" "systemctl is-active mariadb"
+check_item "MySQL instalado" "command -v mysql"
+check_item "MySQL rodando" "systemctl is-active mysql"
 
-if systemctl is-active mariadb &>/dev/null; then
-    if mysql -u ${VTC_ABBR}_user -p$(grep db_password /opt/drivershub/HubBackend/config.json 2>/dev/null | cut -d'"' -f4) -e "USE ${VTC_ABBR}_db;" 2>/dev/null; then
+if systemctl is-active mysql &>/dev/null; then
+    DB_PASS=$(grep db_password /opt/drivershub/HubBackend/config.json 2>/dev/null | cut -d'"' -f4)
+    if mysql -u "${VTC_ABBR}_user" -p"${DB_PASS}" -e "USE ${VTC_ABBR}_db;" 2>/dev/null; then
         echo -e "Banco de dados: ${GREEN}✅ Acessível${NC}"
     else
         echo -e "Banco de dados: ${RED}❌ Erro de acesso${NC}"
