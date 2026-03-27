@@ -2,8 +2,8 @@
 
 ## 📋 Índice
 
-- [Sobre](#sobre)
-- [Requisitos](#requisitos)
+- [Sobre](##🎯Sobre)
+- [Requisitos](##💻Requisitos)
 - [Download](#download)
 - [Preparação](#preparação)
 - [Execução](#execução)
