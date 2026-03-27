@@ -2,14 +2,15 @@
 
 ################################################################################
 # Script de Instalação Automatizada do Drivers Hub
-# Versão: 1.0.1
-# Data: Fevereiro 2026
-# 
+# Versão: 1.1.0
+# Data: Março 2026
+#
 # Este script automatiza a instalação completa do Drivers Hub Backend
 # incluindo configuração de banco de dados, Redis, e serviços.
 ################################################################################
 
-set -e  # Sair em caso de erro
+set -e          # Sair em caso de erro em qualquer comando
+set -o pipefail # Propagar erros em pipelines (ex: cmd | grep)
 
 # Cores para interface
 RED='\033[0;31m'
@@ -22,7 +23,7 @@ NC='\033[0m' # Sem cor
 
 # Variáveis globais
 INSTALL_DIR="/opt/drivershub/HubBackend"
-CONFIG_FILE=""
+STATE_FILE="/opt/drivershub/.installer_state"
 DB_PASSWORD=""
 VTC_NAME=""
 VTC_ABBR=""
@@ -48,8 +49,7 @@ print_header() {
     echo "║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║"
     echo "║              Euro Truck Simulator 2 / ATS                     ║"
     echo "║                                                               ║"
-	echo "║                                                               ║"
-	echo "║ Versão: 1.0.1                                                 ║"
+    echo "║ Versão: 1.1.0                                                 ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -129,21 +129,23 @@ collect_info() {
     
     # Nome da VTC
     while [[ -z "$VTC_NAME" ]]; do
-        read -p "$(echo -e ${CYAN}Nome completo da VTC: ${NC})" VTC_NAME
+        read -r -p "$(echo -e "${CYAN}Nome completo da VTC: ${NC}")" VTC_NAME
     done
     
     # Abreviação
     while [[ -z "$VTC_ABBR" ]]; do
-        read -p "$(echo -e ${CYAN}Abreviação da VTC \(ex: cdmp\): ${NC})" VTC_ABBR
+        read -r -p "$(echo -e "${CYAN}Abreviação da VTC (ex: cdmp): ${NC}")" VTC_ABBR
         VTC_ABBR=$(echo "$VTC_ABBR" | tr '[:upper:]' '[:lower:]')
     done
     
     # Domínio
-    read -p "$(echo -e ${CYAN}Domínio \(deixe vazio para localhost\): ${NC})" DOMAIN
-    DOMAIN=${DOMAIN:-localhost:$PORT}
+    read -r -p "$(echo -e "${CYAN}Domínio (deixe vazio para localhost): ${NC}")" DOMAIN
+    # Remover protocolo e barras que o usuário possa ter digitado
+    DOMAIN=$(echo "$DOMAIN" | sed 's|https\?://||' | sed 's|/$||' | tr -d ' ')
+    DOMAIN=${DOMAIN:-localhost}
     
     # Porta
-    read -p "$(echo -e ${CYAN}Porta do servidor [7777]: ${NC})" input_port
+    read -r -p "$(echo -e "${CYAN}Porta do servidor [7777]: ${NC}")" input_port
     PORT=${input_port:-7777}
     
     echo -e "\n${MAGENTA}🔐 CREDENCIAIS DO BANCO DE DADOS${NC}"
@@ -151,9 +153,9 @@ collect_info() {
     
     # Senha do banco
     while [[ -z "$DB_PASSWORD" ]]; do
-        read -sp "$(echo -e ${CYAN}Senha para o banco de dados MariaDB: ${NC})" DB_PASSWORD
+        read -r -sp "$(echo -e "${CYAN}Senha para o banco de dados MySQL: ${NC}")" DB_PASSWORD
         echo
-        read -sp "$(echo -e ${CYAN}Confirme a senha: ${NC})" DB_PASSWORD_CONFIRM
+        read -r -sp "$(echo -e "${CYAN}Confirme a senha: ${NC}")" DB_PASSWORD_CONFIRM
         echo
         
         if [[ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]]; then
@@ -169,11 +171,11 @@ collect_info() {
     print_info "Steam: https://steamcommunity.com/dev/apikey"
     echo
     
-    read -p "$(echo -e ${CYAN}Discord Client ID: ${NC})" DISCORD_CLIENT_ID
-    read -p "$(echo -e ${CYAN}Discord Client Secret: ${NC})" DISCORD_CLIENT_SECRET
-    read -p "$(echo -e ${CYAN}Discord Bot Token: ${NC})" DISCORD_BOT_TOKEN
-    read -p "$(echo -e ${CYAN}Discord Server \(Guild\) ID: ${NC})" DISCORD_GUILD_ID
-    read -p "$(echo -e ${CYAN}Steam API Key: ${NC})" STEAM_API_KEY
+    read -r -p "$(echo -e "${CYAN}Discord Client ID: ${NC}")" DISCORD_CLIENT_ID
+    read -r -p "$(echo -e "${CYAN}Discord Client Secret: ${NC}")" DISCORD_CLIENT_SECRET
+    read -r -p "$(echo -e "${CYAN}Discord Bot Token: ${NC}")" DISCORD_BOT_TOKEN
+    read -r -p "$(echo -e "${CYAN}Discord Server (Guild) ID: ${NC}")" DISCORD_GUILD_ID
+    read -r -p "$(echo -e "${CYAN}Steam API Key: ${NC}")" STEAM_API_KEY
     
     echo -e "\n${MAGENTA}⚙️  CONFIGURAÇÕES OPCIONAIS${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -194,7 +196,7 @@ collect_info() {
     echo "VTC: $VTC_NAME ($VTC_ABBR)"
     echo "Domínio: $DOMAIN"
     echo "Porta: $PORT"
-    echo "Banco de dados: MariaDB (senha configurada)"
+    echo "Banco de dados: MySQL (senha configurada)"
     echo "Discord: ${DISCORD_CLIENT_ID:0:8}..."
     echo "Steam: ${STEAM_API_KEY:0:8}..."
     echo "Nginx: $INSTALL_NGINX"
@@ -221,36 +223,65 @@ install_system_dependencies() {
     
     print_info "Instalando Python e ferramentas de desenvolvimento..."
     sudo apt install -y python3 python3-pip python3-venv python3-dev build-essential \
-                        libssl-dev libffi-dev git curl wget 2>&1 | grep -v "already"
+                        libssl-dev libffi-dev git curl wget -qq
     
     print_success "Dependências do sistema instaladas"
 }
 
-install_mariadb() {
-    print_step 4 10 "Instalando e configurando MariaDB"
-    
+install_mysql() {
+    print_step 4 10 "Instalando e configurando MySQL"
+
     if ! command -v mysql &> /dev/null; then
-        print_info "Instalando MariaDB..."
-        sudo apt install -y mariadb-server mariadb-client 2>&1 | grep -v "already"
-        
-        print_info "Iniciando serviço MariaDB..."
-        sudo systemctl start mariadb
-        sudo systemctl enable mariadb
-        
-        print_success "MariaDB instalado"
+        print_info "Instalando MySQL Server..."
+
+        # Garantir que não há conflito com MariaDB pré-instalado
+        if dpkg -l | grep -q mariadb-server 2>/dev/null; then
+            print_warning "MariaDB detectado. Removendo para evitar conflito com MySQL..."
+            sudo systemctl stop mariadb 2>/dev/null || true
+            sudo apt-get remove -y --purge mariadb-server mariadb-client mariadb-common -qq
+            sudo apt-get autoremove -y -qq
+        fi
+
+        sudo apt-get install -y mysql-server mysql-client -qq
+
+        print_info "Iniciando serviço MySQL..."
+        sudo systemctl start mysql
+        sudo systemctl enable mysql
+
+        print_success "MySQL instalado"
     else
-        print_info "MariaDB já está instalado"
+        # Checar se o mysql instalado é MySQL (não MariaDB disfarçado)
+        local db_version
+        db_version=$(mysql --version 2>/dev/null || echo "")
+        if echo "$db_version" | grep -qi 'mariadb'; then
+            print_warning "mysql apontando para MariaDB detectado. Reinstalando como MySQL..."
+            sudo systemctl stop mariadb 2>/dev/null || true
+            sudo apt-get remove -y --purge mariadb-server mariadb-client mariadb-common -qq
+            sudo apt-get autoremove -y -qq
+            sudo apt-get install -y mysql-server mysql-client -qq
+            sudo systemctl start mysql
+            sudo systemctl enable mysql
+            print_success "MySQL instalado em substituição ao MariaDB"
+        else
+            print_info "MySQL já está instalado: $db_version"
+        fi
     fi
-    
+
     print_info "Criando banco de dados e usuário..."
-    
-    # Criar banco e usuário
+
+    # No MySQL 8+ o root usa auth_socket por padrão — usar sudo mysql
     sudo mysql -e "CREATE DATABASE IF NOT EXISTS ${VTC_ABBR}_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
     sudo mysql -e "CREATE USER IF NOT EXISTS '${VTC_ABBR}_user'@'localhost' IDENTIFIED BY '$DB_PASSWORD';" 2>/dev/null || true
     sudo mysql -e "GRANT ALL PRIVILEGES ON ${VTC_ABBR}_db.* TO '${VTC_ABBR}_user'@'localhost';" 2>/dev/null || true
     sudo mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
-    
-    print_success "Banco de dados MariaDB configurado"
+
+    # Verificar se o banco foi criado com sucesso
+    if sudo mysql -e "USE ${VTC_ABBR}_db;" 2>/dev/null; then
+        print_success "Banco de dados MySQL configurado"
+    else
+        print_error "Falha ao configurar banco de dados MySQL"
+        exit 1
+    fi
 }
 
 install_redis() {
@@ -258,7 +289,7 @@ install_redis() {
     
     if ! command -v redis-cli &> /dev/null; then
         print_info "Instalando Redis..."
-        sudo apt install -y redis-server 2>&1 | grep -v "already"
+        sudo apt install -y redis-server -qq
         
         print_info "Iniciando serviço Redis..."
         sudo systemctl start redis-server
@@ -361,15 +392,15 @@ create_config_file() {
     "privacy": false,
     "security_level": 1,
     "hex_color": "FFFFFF",
-    "logo_url": "https://{domain}/images/logo.png",
+    "logo_url": "https://$DOMAIN/images/logo.png",
     "banner_background_url": "",
     "banner_background_opacity": 0.15,
     "banner_info_first_row": "rank",
     "openapi": true,
     "frontend_urls": {
-        "member": "https://{domain}/member/{userid}",
-        "delivery": "https://{domain}/delivery/{logid}",
-        "email_confirm": "https://{domain}/auth/email?secret={secret}"
+        "member": "https://$DOMAIN/$VTC_ABBR/member/{userid}",
+        "delivery": "https://$DOMAIN/$VTC_ABBR/delivery/{logid}",
+        "email_confirm": "https://$DOMAIN/$VTC_ABBR/auth/email?secret={secret}"
     },
     "domain": "$DOMAIN",
     "prefix": "/$VTC_ABBR",
@@ -501,7 +532,7 @@ create_systemd_service() {
     sudo tee /etc/systemd/system/drivershub-${VTC_ABBR}.service > /dev/null << EOF
 [Unit]
 Description=$VTC_NAME - Drivers Hub Backend
-After=network.target mariadb.service redis.service
+After=network.target mysql.service redis.service
 
 [Service]
 Type=simple
@@ -540,18 +571,25 @@ configure_nginx() {
     if [[ "$INSTALL_NGINX" != "y" ]]; then
         return
     fi
-    
+
     print_info "Instalando Nginx..."
-    sudo apt install -y nginx 2>&1 | grep -v "already"
-    
-    print_info "Criando configuração do Nginx..."
-    
-    sudo tee /etc/nginx/sites-available/drivershub-${VTC_ABBR} > /dev/null << EOF
+    sudo apt install -y nginx -qq
+
+    print_info "Removendo configuração default do Nginx..."
+    sudo rm -f /etc/nginx/sites-enabled/default
+
+    print_info "Criando configuração do backend (com slot para o frontend)..."
+
+    # Nome do arquivo de configuração salvo também no state para o frontend reutilizar
+    NGINX_CONF_NAME="drivershub-${VTC_ABBR}"
+
+    sudo tee /etc/nginx/sites-available/${NGINX_CONF_NAME} > /dev/null << EOF
 server {
     listen 80;
     server_name $DOMAIN;
 
-    location / {
+    # ── API do backend ────────────────────────────────────────────────────────
+    location /$VTC_ABBR/ {
         proxy_pass http://localhost:$PORT;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -561,14 +599,22 @@ server {
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
     }
+
+    # ── Frontend (React SPA) ──────────────────────────────────────────────────
+    # Este bloco será substituído pelo install-frontend.sh
+    # FRONTEND_PLACEHOLDER
+    location / {
+        return 503 "Frontend ainda nao instalado. Execute: bash scripts/install-frontend.sh";
+        add_header Content-Type text/plain;
+    }
 }
 EOF
 
-    sudo ln -sf /etc/nginx/sites-available/drivershub-${VTC_ABBR} /etc/nginx/sites-enabled/
-    
+    sudo ln -sf /etc/nginx/sites-available/${NGINX_CONF_NAME} \
+                /etc/nginx/sites-enabled/${NGINX_CONF_NAME}
+
     print_info "Testando configuração do Nginx..."
     if sudo nginx -t; then
-        print_info "Reiniciando Nginx..."
         sudo systemctl restart nginx
         print_success "Nginx configurado"
     else
@@ -581,18 +627,52 @@ configure_ssl() {
     if [[ "$INSTALL_SSL" != "y" ]]; then
         return
     fi
-    
+
     print_info "Instalando Certbot..."
-    sudo apt install -y certbot python3-certbot-nginx 2>&1 | grep -v "already"
-    
+    sudo apt install -y certbot python3-certbot-nginx -qq
+
     print_info "Obtendo certificado SSL..."
-    print_warning "Certifique-se de que seu domínio $DOMAIN aponta para este servidor!"
-    
-    if sudo certbot --nginx -d $DOMAIN --non-interactive --agree-tos --register-unsafely-without-email; then
+    print_warning "Certifique-se de que o domínio '$DOMAIN' aponta para este servidor!"
+
+    if sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email; then
         print_success "SSL configurado com sucesso"
     else
-        print_error "Falha ao configurar SSL. Configure manualmente depois."
+        print_warning "Falha ao configurar SSL automaticamente. Configure manualmente depois com:"
+        print_warning "  sudo certbot --nginx -d $DOMAIN"
     fi
+}
+
+################################################################################
+# Salvar estado da instalação para uso pelo install-frontend.sh
+################################################################################
+
+save_installer_state() {
+    print_info "Salvando estado da instalação..."
+
+    # Garantir que o diretório base existe
+    sudo mkdir -p /opt/drivershub
+    sudo chown "$USER":"$USER" /opt/drivershub
+
+    # Determinar protocolo real já aplicado
+    local protocol="http"
+    [[ "$INSTALL_SSL" == "y" ]] && protocol="https"
+
+    cat > "$STATE_FILE" << EOF
+# Gerado automaticamente por install-drivershub.sh — não edite manualmente
+BACKEND_VTC_NAME="$VTC_NAME"
+BACKEND_VTC_ABBR="$VTC_ABBR"
+BACKEND_DOMAIN="$DOMAIN"
+BACKEND_PORT="$PORT"
+BACKEND_PROTOCOL="$protocol"
+BACKEND_INSTALL_NGINX="$INSTALL_NGINX"
+BACKEND_INSTALL_SSL="$INSTALL_SSL"
+BACKEND_NGINX_CONF="drivershub-${VTC_ABBR}"
+BACKEND_INSTALL_DIR="$INSTALL_DIR"
+BACKEND_INSTALLED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+EOF
+
+    chmod 600 "$STATE_FILE"
+    print_success "Estado salvo em $STATE_FILE"
 }
 
 ################################################################################
@@ -602,35 +682,36 @@ configure_ssl() {
 print_final_info() {
     clear
     print_header
-    
+
     echo -e "${GREEN}"
     echo "╔═══════════════════════════════════════════════════════════════╗"
     echo "║                                                               ║"
-    echo "║           ✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO! ✅            ║"
+    echo "║        ✅ BACKEND INSTALADO COM SUCESSO! ✅                   ║"
     echo "║                                                               ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
-    
+
     echo -e "\n${CYAN}📊 INFORMAÇÕES DO SISTEMA${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "VTC: $VTC_NAME"
     echo "Abreviação: $VTC_ABBR"
-    
+
     if [[ "$INSTALL_NGINX" == "y" ]]; then
         if [[ "$INSTALL_SSL" == "y" ]]; then
-            echo "URL de Acesso: https://$DOMAIN"
+            echo "URL do Backend: https://$DOMAIN/$VTC_ABBR"
         else
-            echo "URL de Acesso: http://$DOMAIN"
+            echo "URL do Backend: http://$DOMAIN/$VTC_ABBR"
         fi
     else
-        echo "URL de Acesso: http://localhost:$PORT/$VTC_ABBR"
+        echo "URL do Backend: http://localhost:$PORT/$VTC_ABBR"
     fi
-    
+
     echo ""
     echo "Serviço: drivershub-${VTC_ABBR}.service"
     echo "Diretório: $INSTALL_DIR"
     echo "Config: $INSTALL_DIR/config.json"
-    
+    echo "State: $STATE_FILE"
+
     echo -e "\n${CYAN}🔧 COMANDOS ÚTEIS${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Ver status:    sudo systemctl status drivershub-${VTC_ABBR}"
@@ -638,7 +719,7 @@ print_final_info() {
     echo "Reiniciar:     sudo systemctl restart drivershub-${VTC_ABBR}"
     echo "Parar:         sudo systemctl stop drivershub-${VTC_ABBR}"
     echo "Iniciar:       sudo systemctl start drivershub-${VTC_ABBR}"
-    
+
     echo -e "\n${CYAN}⚠️  PRÓXIMOS PASSOS IMPORTANTES${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "1. Configure o Redirect URI no Discord Developer Portal:"
@@ -652,16 +733,17 @@ print_final_info() {
     echo ""
     echo "2. Convide o bot Discord para seu servidor com permissões de admin"
     echo ""
-    echo "3. Acesse a interface web e faça login com Discord"
+    echo "3. Instale o Frontend executando:"
+    echo -e "   ${GREEN}bash scripts/install-frontend.sh${NC}"
     echo ""
-    echo "4. Configure os cargos e webhooks do Discord no painel"
-    
+    echo "4. Após o frontend, acesse a interface web e faça login com Discord"
+
     echo -e "\n${CYAN}📚 DOCUMENTAÇÃO E SUPORTE${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Wiki: https://wiki.charlws.com/books/chub"
     echo "Discord: https://discord.gg/wNTaaBZ5qd"
     echo "Site: https://drivershub.charlws.com"
-    
+
     echo -e "\n${GREEN}🎉 Boa sorte com sua transportadora virtual! 🚚${NC}\n"
 }
 
@@ -671,28 +753,31 @@ print_final_info() {
 
 main() {
     print_header
-    
+
     # Verificações iniciais
     check_root
     check_requirements
-    
+
     # Coletar informações
     collect_info
-    
+
     # Executar instalação
     install_system_dependencies
-    install_mariadb
+    install_mysql
     install_redis
     clone_repository
     setup_python_env
     fix_database_code
     create_config_file
     create_systemd_service
-    
+
     # Configurações opcionais
     configure_nginx
     configure_ssl
-    
+
+    # Salvar estado para o instalador do frontend
+    save_installer_state
+
     # Finalizar
     print_final_info
 }
