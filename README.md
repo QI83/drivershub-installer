@@ -1,6 +1,6 @@
 # 🚚 Drivers Hub — Instalador Automático
 
-[![Versão](https://img.shields.io/badge/versão-1.1.0-blue.svg)](https://github.com/QI83/drivershub-installer/releases)
+[![Versão](https://img.shields.io/badge/versão-1.2.0-blue.svg)](https://github.com/QI83/drivershub-installer/releases)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04+-orange.svg)](https://ubuntu.com/)
 [![Bash](https://img.shields.io/badge/Bash-5.0+-lightgrey.svg)](https://www.gnu.org/software/bash/)
 [![ShellCheck](https://img.shields.io/badge/ShellCheck-passing-brightgreen.svg)](https://www.shellcheck.net/)
@@ -9,7 +9,7 @@
 
 > **Instalação automatizada completa do Drivers Hub — Backend + Frontend — para transportadoras virtuais de Euro Truck Simulator 2 e American Truck Simulator.**
 
-[🚀 Início Rápido](#-início-rápido) • [✨ O Que Instala](#-o-que-instala) • [📖 Documentação](#-documentação) • [🔧 Pós-Instalação](#-pós-instalação) • [🆘 Suporte](#-suporte)
+[🚀 Início Rápido](#-início-rápido) • [✨ O Que Instala](#-o-que-instala) • [🛠️ Scripts](#️-scripts-disponíveis) • [📖 Documentação](#-documentação) • [🆘 Suporte](#-suporte)
 
 ---
 
@@ -19,28 +19,26 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║
 ║              Euro Truck Simulator 2 / ATS                     ║
-║ Versão: 1.1.0                                                 ║
+║ Versão: 1.2.0                                                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-[PASSO 4/10] Instalando e configurando MySQL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ℹ️  Instalando MySQL Server...
-ℹ️  Iniciando serviço MySQL...
-✅ MySQL instalado
-ℹ️  Criando banco de dados e usuário...
-✅ Banco de dados MySQL configurado
+⚠️  INSTALAÇÃO EXISTENTE DETECTADA!
 
-[PASSO 10/10] Configurando serviço systemd
+  VTC:          CDMP Express (cdmp)
+  Backend:      /opt/drivershub/HubBackend
+  Instalado em: 2026-03-15T14:32:00Z
+  Serviço:      ✅ Rodando
+
+O que deseja fazer?
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Serviço iniciado com sucesso
-✅ Estado salvo em /opt/drivershub/.installer_state
+  1) Reparar instalação   — corrige dependências sem apagar dados
+  2) Nova instalação      — APAGA tudo e instala do zero
+  3) Cancelar
 ```
 
 ---
 
 ## ✨ O Que Instala
-
-A instalação é feita em **duas etapas independentes**:
 
 ### 🔧 Etapa 1 — Backend (`install-drivershub.sh`)
 
@@ -65,7 +63,6 @@ A instalação é feita em **duas etapas independentes**:
 | **Build estático** | Compilação React + Vite otimizada para produção |
 | **Deploy Nginx** | Arquivos servidos em `/var/www/drivershub-frontend/` |
 | **Roteamento SPA** | `try_files` configurado para suporte ao React Router |
-| **Cache de assets** | Headers de cache de 1 ano para JS/CSS/imagens |
 
 ---
 
@@ -80,52 +77,69 @@ A instalação é feita em **duas etapas independentes**:
 | RAM | 2 GB |
 | Disco | 10 GB livres |
 | Acesso | Usuário normal com `sudo` — **NÃO root!** |
-| Internet | Conexão estável |
 
-### Informações necessárias antes de começar
-
-- 🎮 **Discord Developer Portal** → [discord.com/developers/applications](https://discord.com/developers/applications)
-  - Client ID, Client Secret, Bot Token, Server (Guild) ID
+Antes de começar, tenha em mãos:
+- 🎮 **Discord**: Client ID, Client Secret, Bot Token, Server ID → [discord.com/developers/applications](https://discord.com/developers/applications)
 - 🎮 **Steam API Key** → [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)
-- 📋 **Dados da VTC** → Nome completo, sigla (ex: `cdmp`), domínio
+- 📋 **Dados da VTC**: nome, sigla (ex: `cdmp`), domínio
+
+### Instalação passo a passo
+
+```bash
+# 1. Clonar o projeto
+git clone https://github.com/QI83/drivershub-installer.git
+cd drivershub-installer
+
+# 2. Instalar o Backend (Python, MySQL, Redis, serviço)
+bash scripts/install-drivershub.sh
+
+# 3. Instalar o Frontend (Node.js, build React, Nginx)
+bash scripts/install-frontend.sh
+
+# 4. Verificar se tudo está funcionando
+bash scripts/verificar-instalacao.sh
+```
+
+> ⏱️ Tempo total estimado: **10–25 minutos**
 
 ---
 
-### Instalação
+## 🛠️ Scripts Disponíveis
 
-#### Passo 1 — Baixar o projeto
+| Script | Finalidade |
+|---|---|
+| `install-drivershub.sh` | **Instalar** o Backend |
+| `install-frontend.sh` | **Instalar** o Frontend |
+| `update-drivershub.sh` | **Atualizar** Backend e/ou Frontend |
+| `uninstall-drivershub.sh` | **Desinstalar** completamente |
+| `verificar-instalacao.sh` | **Verificar** todos os componentes |
+
+### Atualizar
 
 ```bash
-git clone https://github.com/QI83/drivershub-installer.git
-cd drivershub-installer
+bash scripts/update-drivershub.sh
 ```
 
-#### Passo 2 — Instalar o Backend
+Faz backup automático do `config.json` antes de qualquer alteração, executa `git pull` nos repositórios e reinstala dependências. Você escolhe o que atualizar.
+
+### Desinstalar
+
+```bash
+bash scripts/uninstall-drivershub.sh
+```
+
+Remove cada componente (serviço, Nginx, banco, arquivos) com confirmação individual. O banco de dados exige confirmação extra por ser irreversível.
+
+### Modo reparo
+
+Se algo quebrar, rode novamente o instalador do backend:
 
 ```bash
 bash scripts/install-drivershub.sh
+# → Selecione: 1) Reparar instalação
 ```
 
-> ⏱️ Tempo estimado: **5–15 minutos**
->
-> O script irá instalar Python, MySQL, Redis, clonar o HubBackend, gerar o `config.json` e configurar o serviço systemd.
-> Ao final, salva um arquivo de estado em `/opt/drivershub/.installer_state` usado pelo instalador do frontend.
-
-#### Passo 3 — Instalar o Frontend
-
-```bash
-bash scripts/install-frontend.sh
-```
-
-> ⏱️ Tempo estimado: **3–10 minutos** (depende da velocidade do npm install)
->
-> O script lê automaticamente as configurações salvas pelo backend, instala Node.js se necessário, faz o build do HubFrontend e configura o Nginx para servir a interface.
-
-#### Passo 4 — Verificar
-
-```bash
-bash scripts/verificar-instalacao.sh
-```
+O modo reparo corrige dependências, reinicia serviços e reaplicar patches sem tocar no `config.json` nem nos dados.
 
 ---
 
@@ -133,98 +147,52 @@ bash scripts/verificar-instalacao.sh
 
 | Documento | Descrição |
 |---|---|
-| 📖 [GUIA_INSTALACAO.md](docs/GUIA_INSTALACAO.md) | Guia detalhado passo a passo |
-| 🔧 [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Soluções para os problemas mais comuns |
+| 📖 [GUIA_INSTALACAO.md](docs/GUIA_INSTALACAO.md) | Guia detalhado passo a passo com exemplos |
+| 🔧 [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Soluções rápidas para os problemas mais comuns |
 | 📋 [README.txt](README.txt) | Referência rápida em texto puro |
 | 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) | Como contribuir com o projeto |
-
-### Scripts disponíveis
-
-| Script | Descrição |
-|---|---|
-| `scripts/install-drivershub.sh` | Instalador do Backend — Python, MySQL, Redis, Nginx |
-| `scripts/install-frontend.sh` | Instalador do Frontend — Node.js, React build, deploy |
-| `scripts/verificar-instalacao.sh` | Verificação pós-instalação de todos os componentes |
 
 ---
 
 ## 🔧 Pós-Instalação
 
-### 1. Configurar o Discord Redirect URI
+### 1. Discord Redirect URI
 
-No [Discord Developer Portal](https://discord.com/developers/applications), em **OAuth2 → Redirects**, adicione:
+No [Discord Developer Portal](https://discord.com/developers/applications) → **OAuth2 → Redirects**:
 
 ```
 https://seudominio.com/[SIGLA]/api/auth/discord/callback
 ```
 
-> Substitua `seudominio.com` pelo seu domínio e `[SIGLA]` pela abreviação da VTC.
+### 2. Convidar o Bot
 
-### 2. Convidar o Bot Discord
+**OAuth2 → URL Generator** → escopos `bot` + `applications.commands` → permissão `Administrator`
 
-1. No portal, acesse **OAuth2 → URL Generator**
-2. Escopos: `bot` + `applications.commands`
-3. Permissões Bot: `Administrator`
-4. Copie a URL gerada, abra no navegador e selecione seu servidor
+### 3. Acessar
 
-### 3. Acessar o sistema
-
-| Situação | URL |
+| Configuração | URL |
 |---|---|
 | Com domínio + SSL | `https://seudominio.com/` |
-| Com domínio, sem SSL | `http://seudominio.com/` |
-| Sem Nginx (apenas backend) | `http://localhost:7777/[sigla]` |
+| Com domínio sem SSL | `http://seudominio.com/` |
+| Sem Nginx | `http://localhost:7777/[sigla]` |
 
 ---
 
 ## 📋 Comandos Úteis
 
-### Backend
-
 ```bash
-# Status do serviço
-sudo systemctl status drivershub-[SIGLA]
-
-# Logs em tempo real
-sudo journalctl -u drivershub-[SIGLA] -f
-
-# Reiniciar / parar / iniciar
+# Backend — gerenciamento do serviço
+sudo systemctl status  drivershub-[SIGLA]
+sudo journalctl -u     drivershub-[SIGLA] -f
 sudo systemctl restart drivershub-[SIGLA]
-sudo systemctl stop    drivershub-[SIGLA]
-sudo systemctl start   drivershub-[SIGLA]
 
-# Editar configuração
-nano /opt/drivershub/HubBackend/config.json
-sudo systemctl restart drivershub-[SIGLA]
-```
-
-### Frontend
-
-```bash
-# Atualizar para a versão mais recente
-cd /opt/drivershub/HubFrontend
-git pull
-npm ci
-npm run build
-sudo rsync -a --delete build/ /var/www/drivershub-frontend/
-sudo systemctl reload nginx
-
-# Logs do Nginx
-sudo tail -f /var/log/nginx/error.log
-sudo tail -f /var/log/nginx/access.log
-```
-
-### Banco de Dados (MySQL)
-
-```bash
-# Acessar o banco
+# Banco de dados
 mysql -u [SIGLA]_user -p [SIGLA]_db
-
-# Backup
 mysqldump -u [SIGLA]_user -p [SIGLA]_db > backup_$(date +%Y%m%d).sql
 
-# Restaurar
-mysql -u [SIGLA]_user -p [SIGLA]_db < backup_YYYYMMDD.sql
+# Nginx
+sudo nginx -t && sudo systemctl reload nginx
+sudo tail -f /var/log/nginx/error.log
 ```
 
 ---
@@ -246,110 +214,48 @@ mysql -u [SIGLA]_user -p [SIGLA]_db < backup_YYYYMMDD.sql
                                          │
                               ┌──────────┴──────────┐
                               │                     │
-                         [MySQL]               [Redis]
-                    banco de dados           cache / sessão
+                           [MySQL]              [Redis]
+                       banco de dados         cache / sessão
 ```
 
 ---
 
 ## 📝 Changelog
 
+### [1.2.0] — Março 2026
+- ✨ `update-drivershub.sh` — atualiza Backend e/ou Frontend com backup automático
+- ✨ `uninstall-drivershub.sh` — desinstalação completa com confirmação por etapa
+- ✨ Detecção de instalação existente com menu de reparo / reinstalar / cancelar
+- ✨ Modo reparo preserva `config.json` e recarrega dados automaticamente
+- ✨ Validação de credenciais Discord e Steam antes de instalar
+
 ### [1.1.0] — Março 2026
-
-#### ✨ Adicionado
-- `install-frontend.sh` — instalador completo do HubFrontend (Node.js, build, Nginx SPA)
-- `save_installer_state()` — persiste configurações do backend em `/opt/drivershub/.installer_state`
-- Nginx com roteamento separado: `/[sigla]/` para API, `/` para frontend
-- Detecção e remoção automática de MariaDB conflitante ao instalar MySQL
-- Verificação do banco de dados após criação
-- `-r` em todos os `read` e aspas nos argumentos de cor
-
-#### 🐛 Corrigido
-- **Bug crítico**: `set -o pipefail` + `grep -v "already"` causava abort silencioso do script em 5 lugares
-- **Bug crítico**: `{domain}` literal gerado no `config.json` em vez do domínio real
-- Domínio sanitizado: remove `https://`, barras e espaços digitados pelo usuário
-- Variável `CONFIG_FILE` declarada mas nunca usada removida
-- Indentação mista (tabs/espaços) corrigida
-- Dependência do systemd corrigida: `mariadb.service` → `mysql.service`
-- Certbot: aspas adicionadas em `-d "$DOMAIN"`, erro não mais fatal
-- `verificar-instalacao.sh`: bug SC2046 corrigido (aspas no `-p"${DB_PASS}"`)
-
-#### 🔄 Alterado
-- **MariaDB substituído por MySQL** em todos os scripts e documentação
-- Nginx: bloco `location /` separado do proxy do backend
-
----
-
-### [1.0.1] — Fevereiro 2026
-
-#### 🐛 Corrigido
-- Ajustes menores na interface
-
----
+- ✨ `install-frontend.sh` — instalador completo do HubFrontend
+- ✨ State file `/opt/drivershub/.installer_state` para comunicação entre scripts
+- ✨ Nginx separado: `/[sigla]/` → API, `/` → frontend
+- 🐛 Bug crítico: `set -o pipefail` + `grep -v` causava abort silencioso
+- 🐛 Bug crítico: `{domain}` literal no `config.json`
+- 🔄 MariaDB substituído por MySQL
 
 ### [1.0.0] — Fevereiro 2026
-
-#### ✨ Adicionado
-- Script de instalação automatizado do Backend
-- Documentação completa
-- Script de verificação pós-instalação
-- Guia de troubleshooting
-- Interface colorida e interativa
+- ✨ Script de instalação automatizado do Backend
+- ✨ Documentação completa e script de verificação
 
 ---
 
 ## 🔒 Segurança
 
-### Boas Práticas
-
-- 🔐 Use senhas fortes para o banco de dados
-- 🔒 Configure firewall (`ufw allow 80,443/tcp`)
-- 🌐 Use sempre SSL em produção
-- 💾 Configure backups automáticos do banco
-- 📊 Monitore os logs regularmente
-
-### Reportar Vulnerabilidades
-
-Encontrou uma vulnerabilidade? **Não abra uma issue pública.**
-Envie um e-mail para: **kiq.reis09@gmail.com**
+Use senhas fortes, configure firewall (`ufw allow 80,443/tcp`), SSL em produção e backups regulares.
+Vulnerabilidades: **não abra issue pública** — envie e-mail para **kiq.reis09@gmail.com**
 
 ---
 
 ## 🆘 Suporte
 
-### Documentação Oficial do Drivers Hub
-
 - 📖 **Wiki**: https://wiki.charlws.com/books/chub
 - 💬 **Discord**: https://discord.gg/wNTaaBZ5qd
 - 🌐 **Site**: https://drivershub.charlws.com
-
-### Problemas Comuns
-
-Consulte o [Guia de Troubleshooting](docs/TROUBLESHOOTING.md):
-
-- ❌ Serviço não inicia
-- ❌ Erro de conexão com MySQL
-- ❌ Login Discord não funciona
-- ❌ Frontend não carrega / página em branco
-- ❌ Nginx retorna 503
-
-### Reportar Bugs
-
-Encontrou um bug? [Abra uma issue](https://github.com/QI83/drivershub-installer/issues/new) com o máximo de detalhes possível.
-
----
-
-## 🤝 Contribuindo
-
-Contribuições são bem-vindas!
-
-1. Fork este repositório
-2. Crie uma branch: `git checkout -b minha-feature`
-3. Commit suas mudanças: `git commit -m 'feat: descrição da mudança'`
-4. Push: `git push origin minha-feature`
-5. Abra um Pull Request
-
-Consulte o [CONTRIBUTING.md](CONTRIBUTING.md) para as diretrizes completas.
+- 🐛 **Bugs**: [Abra uma issue](https://github.com/QI83/drivershub-installer/issues/new)
 
 ---
 
@@ -357,28 +263,17 @@ Consulte o [CONTRIBUTING.md](CONTRIBUTING.md) para as diretrizes completas.
 
 ![GitHub repo size](https://img.shields.io/github/repo-size/QI83/drivershub-installer)
 ![GitHub issues](https://img.shields.io/github/issues/QI83/drivershub-installer)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/QI83/drivershub-installer)
 ![GitHub last commit](https://img.shields.io/github/last-commit/QI83/drivershub-installer)
 
 ---
 
 ## 👥 Autores
 
-- **ScriptKID** — *Criador do instalador automatizado* — [@QI83](https://github.com/QI83)
-
-### Agradecimentos
-
-- [CharlesWithC](https://github.com/CharlesWithC) — Criador do Drivers Hub
-- Comunidade ETS2/ATS
-- Todos os contribuidores
-
----
+**Caique Reis** — [@QI83](https://github.com/QI83) · Agradecimentos: [CharlesWithC](https://github.com/CharlesWithC) e à comunidade ETS2/ATS.
 
 ## 📄 Licença
 
-Este projeto está licenciado sob a Licença MIT — veja [LICENSE](LICENSE) para detalhes.
-
-O [HubBackend](https://github.com/CharlesWithC/HubBackend) e o [HubFrontend](https://github.com/CharlesWithC/HubFrontend) são copyright © 2022–2026 CharlesWithC, licenciados sob AGPL-3.0.
+MIT — veja [LICENSE](LICENSE). HubBackend e HubFrontend: AGPL-3.0 © 2022–2026 CharlesWithC.
 
 ---
 
@@ -386,8 +281,6 @@ O [HubBackend](https://github.com/CharlesWithC/HubBackend) e o [HubFrontend](htt
 
 **Feito com ❤️ para a comunidade de transportadoras virtuais ETS2/ATS**
 
-[⬆ Voltar ao topo](#-drivers-hub--instalador-automático)
-
-⭐ Se este projeto te ajudou, considere dar uma estrela!
+[⬆ Voltar ao topo](#-drivers-hub--instalador-automático) · ⭐ Deixe uma estrela se ajudou!
 
 </div>
