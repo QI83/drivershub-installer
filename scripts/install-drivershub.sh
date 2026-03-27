@@ -340,8 +340,9 @@ validate_credentials() {
                 echo "  Portal: https://steamcommunity.com/dev/apikey"
                 read -r -p "$(echo -e "${CYAN}Steam API Key: ${NC}")" STEAM_API_KEY
             fi
-            # Não revalida para não entrar em loop — o usuário confirmou
-            print_info "Credenciais atualizadas. Prosseguindo com a instalação."
+            # Revalidar com as novas credenciais
+            print_info "Revalidando credenciais corrigidas..."
+            validate_credentials
         else
             print_warning "Prosseguindo com credenciais inválidas. O login Discord pode não funcionar."
         fi
@@ -452,27 +453,43 @@ collect_info() {
     echo -e "\n${MAGENTA}⚙️  CONFIGURAÇÕES OPCIONAIS${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    if confirm "Deseja instalar e configurar Nginx como proxy reverso?"; then
+    # Perguntar sobre Frontend ANTES do Nginx para contextualizar
+    echo -e "${CYAN}ℹ️  O Drivers Hub possui uma interface web (Frontend React).${NC}"
+    echo "   Para usá-la, o Nginx é obrigatório."
+    echo ""
+    if confirm "Deseja instalar o Frontend (interface web) após o backend?" "y"; then
+        print_info "Frontend selecionado — Nginx será configurado automaticamente."
         INSTALL_NGINX="y"
-    fi
-
-    if [[ "$INSTALL_NGINX" == "y" ]] && [[ "$DOMAIN" != "localhost"* ]]; then
-        if confirm "Deseja configurar SSL/HTTPS com Let's Encrypt?"; then
-            INSTALL_SSL="y"
+        echo ""
+        if [[ "$DOMAIN" != "localhost"* ]]; then
+            if confirm "Deseja configurar SSL/HTTPS com Let's Encrypt?"; then
+                INSTALL_SSL="y"
+            fi
+        fi
+    else
+        print_info "Frontend não selecionado — acesso apenas via API na porta $PORT."
+        echo ""
+        if confirm "Deseja instalar o Nginx como proxy reverso para a API?"; then
+            INSTALL_NGINX="y"
+            if [[ "$DOMAIN" != "localhost"* ]]; then
+                if confirm "Deseja configurar SSL/HTTPS com Let's Encrypt?"; then
+                    INSTALL_SSL="y"
+                fi
+            fi
         fi
     fi
 
     # Resumo
     echo -e "\n${GREEN}📊 RESUMO DA INSTALAÇÃO${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "VTC: $VTC_NAME ($VTC_ABBR)"
-    echo "Domínio: $DOMAIN"
-    echo "Porta: $PORT"
-    echo "Banco de dados: MySQL (senha configurada)"
-    echo "Discord: ${DISCORD_CLIENT_ID:0:8}..."
-    echo "Steam: ${STEAM_API_KEY:0:8}..."
-    echo "Nginx: $INSTALL_NGINX"
-    echo "SSL: $INSTALL_SSL"
+    echo "VTC:             $VTC_NAME ($VTC_ABBR)"
+    echo "Domínio:         $DOMAIN"
+    echo "Porta:           $PORT"
+    echo "Banco de dados:  MySQL (senha configurada)"
+    echo "Discord:         ${DISCORD_CLIENT_ID:0:8}..."
+    echo "Steam:           ${STEAM_API_KEY:0:8}..."
+    echo "Nginx:           $INSTALL_NGINX"
+    echo "SSL:             $INSTALL_SSL"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     if ! confirm "Confirma as informações acima e deseja continuar?"; then
@@ -550,6 +567,10 @@ install_mysql() {
     sudo mysql -e "GRANT ALL PRIVILEGES ON ${VTC_ABBR}_db.* TO '${VTC_ABBR}_user'@'localhost';" 2>/dev/null || true
     sudo mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
 
+    # Forçar mysql_native_password globalmente para novas conexões via pymysql
+    # (o plugin client-config.py também usa pymysql diretamente)
+    sudo mysql -e "SET GLOBAL default_authentication_plugin='mysql_native_password';" 2>/dev/null || true
+
     # Verificar se o banco foi criado com sucesso
     if sudo mysql -e "USE ${VTC_ABBR}_db;" 2>/dev/null; then
         print_success "Banco de dados MySQL configurado"
@@ -615,7 +636,8 @@ setup_python_env() {
 
     if [ ! -d "venv" ]; then
         print_info "Criando ambiente virtual..."
-        python3 -m venv venv
+        # Redirecionar stdin para evitar travamento em alguns ambientes
+        python3 -m venv venv < /dev/null
     fi
 
     print_info "Ativando ambiente virtual..."
@@ -623,16 +645,15 @@ setup_python_env() {
     source venv/bin/activate
 
     print_info "Atualizando pip..."
-    pip install --upgrade pip -q
+    pip install --upgrade pip -q < /dev/null
 
     print_info "Instalando dependências Python..."
-    pip install -r requirements.txt -q
+    pip install -r requirements.txt -q < /dev/null
 
     # Instalar cryptography explicitamente — necessário para pymysql autenticar
     # com MySQL 8+ que usa caching_sha2_password por padrão.
-    # Mesmo que já esteja no requirements.txt, garantimos que está instalado e atualizado.
     print_info "Instalando pacote cryptography (compatibilidade MySQL 8+)..."
-    pip install cryptography -q
+    pip install cryptography -q < /dev/null
 
     deactivate
     print_success "Ambiente Python configurado"
@@ -701,6 +722,7 @@ create_config_file() {
     "webhook_error": "",
     "database": "mysql",
     "db_host": "localhost",
+    "db_port": 3306,
     "db_user": "${VTC_ABBR}_user",
     "db_password": "$DB_PASSWORD",
     "db_name": "${VTC_ABBR}_db",
@@ -716,7 +738,7 @@ create_config_file() {
     "redis_db": 0,
     "redis_password": null,
     "plugins": ["announcements", "applications", "banner", "challenges", "divisions", "downloads", "events", "polls", "route"],
-    "external_plugins": [],
+    "external_plugins": ["client-config"],
     "sync_discord_email": true,
     "must_join_guild": true,
     "use_server_nickname": true,
