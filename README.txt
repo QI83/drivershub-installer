@@ -5,17 +5,22 @@
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-🚀 INÍCIO RÁPIDO
+🚀 INÍCIO RÁPIDO — INSTALAÇÃO COMPLETA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Baixe o script:
-   wget https://github.com/KIQ09/drivershub-installer/blob/main/scripts/install-drivershub.sh
-   chmod +x install-drivershub.sh
+A instalação é feita em duas etapas:
 
-2. Execute:
-   ./install-drivershub.sh
+  PASSO 1 — Backend (API, banco de dados, serviços)
+  ─────────────────────────────────────────────────
+  git clone https://github.com/QI83/drivershub-installer.git
+  cd drivershub-installer
+  bash scripts/install-drivershub.sh
 
-3. Siga as instruções na tela
+  PASSO 2 — Frontend (interface web React)
+  ─────────────────────────────────────────────────
+  bash scripts/install-frontend.sh
+
+  Siga as instruções na tela de cada script.
 
 
 📋 ANTES DE COMEÇAR
@@ -34,7 +39,7 @@ Tenha em mãos:
 ✅ Informações da sua VTC
    - Nome completo
    - Abreviação (sigla)
-   - Domínio (opcional)
+   - Domínio (ex: hub.minhaVTC.com)
 
 
 💻 REQUISITOS DO SISTEMA
@@ -47,44 +52,57 @@ Disco: 10 GB livres
 Acesso: Usuário normal com sudo (NÃO root!)
 
 
-✨ O QUE O SCRIPT FAZ
+✨ O QUE OS SCRIPTS FAZEM
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-✅ Instala todas as dependências (Python, MariaDB, Redis)
-✅ Clona e configura o Drivers Hub
-✅ Cria banco de dados automaticamente
-✅ Gera config.json personalizado
-✅ Configura serviço systemd
-✅ Instala Nginx (opcional)
-✅ Configura SSL (opcional)
+install-drivershub.sh (Backend):
+  ✅ Instala Python, MySQL, Redis
+  ✅ Clona e configura o HubBackend
+  ✅ Cria banco de dados automaticamente
+  ✅ Gera config.json personalizado
+  ✅ Configura serviço systemd
+  ✅ Instala e configura Nginx (opcional)
+  ✅ Configura SSL com Let's Encrypt (opcional)
+  ✅ Salva estado para o instalador do frontend
+
+install-frontend.sh (Frontend):
+  ✅ Verifica e instala Node.js 20+
+  ✅ Clona o HubFrontend
+  ✅ Gera .env.production com URL do backend
+  ✅ Compila o build de produção (npm run build)
+  ✅ Faz deploy dos arquivos estáticos no Nginx
+  ✅ Configura roteamento SPA (React Router)
+  ✅ Verifica a instalação automaticamente
 
 
 🔧 COMANDOS ÚTEIS APÓS INSTALAÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Ver status:
+Backend:
   sudo systemctl status drivershub-[SIGLA]
-
-Ver logs:
   sudo journalctl -u drivershub-[SIGLA] -f
-
-Reiniciar:
   sudo systemctl restart drivershub-[SIGLA]
-
-Editar config:
   nano /opt/drivershub/HubBackend/config.json
+
+Frontend (atualizar):
+  cd /opt/drivershub/HubFrontend
+  git pull && npm ci && npm run build
+  sudo rsync -a --delete build/ /var/www/drivershub-frontend/
+  sudo systemctl reload nginx
+
+Verificar instalação:
+  bash scripts/verificar-instalacao.sh
 
 
 ⚠️  IMPORTANTE APÓS INSTALAÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Configure o Redirect URI no Discord Developer Portal:
-   http://localhost:7777/[SIGLA]/api/auth/discord/callback
-   (ou use seu domínio)
+   https://[SEU_DOMINIO]/[SIGLA]/api/auth/discord/callback
 
 2. Convide o bot Discord para seu servidor
 
-3. Acesse: http://localhost:7777/[SIGLA]
+3. Acesse: https://[SEU_DOMINIO]/
 
 4. Faça login com Discord e configure sua VTC
 
@@ -92,14 +110,10 @@ Editar config:
 📚 DOCUMENTAÇÃO COMPLETA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Leia: GUIA_INSTALACAO.md
+Leia: docs/GUIA_INSTALACAO.md
+      docs/TROUBLESHOOTING.md
 
-Contém:
-- Preparação detalhada
-- Solução de problemas
-- Comandos úteis
-- Configurações avançadas
-- Segurança e backups
+Wiki oficial: https://wiki.charlws.com/books/chub
 
 
 🆘 SUPORTE
@@ -111,5 +125,5 @@ Site: https://drivershub.charlws.com
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Versão: 1.0.0 | Criado para a comunidade ETS2/ATS 🚚
+Versão: 1.1.0 | Criado para a comunidade ETS2/ATS 🚚
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
