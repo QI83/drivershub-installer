@@ -1,6 +1,6 @@
 # 🚚 Drivers Hub — Instalador Automático
 
-[![Versão](https://img.shields.io/badge/versão-1.2.0-blue.svg)](https://github.com/QI83/drivershub-installer/releases)
+[![Versão](https://img.shields.io/badge/versão-1.2.1-blue.svg)](https://github.com/QI83/drivershub-installer/releases)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04+-orange.svg)](https://ubuntu.com/)
 [![Bash](https://img.shields.io/badge/Bash-5.0+-lightgrey.svg)](https://www.gnu.org/software/bash/)
 [![ShellCheck](https://img.shields.io/badge/ShellCheck-passing-brightgreen.svg)](https://www.shellcheck.net/)
@@ -221,6 +221,14 @@ sudo tail -f /var/log/nginx/error.log
 ---
 
 ## 📝 Changelog
+
+### [1.2.1] — Março 2026
+- 🐛 **Bug crítico**: `"external_plugins": []` no `config.json` gerado causava tela "inoperância temporária" — corrigido para `["client-config"]`
+- 🐛 **Bug crítico**: `python3 -m venv` travava aguardando input no Passo 7 — corrigido com `< /dev/null`
+- 🐛 MySQL 8+: `default_authentication_plugin` definido globalmente para cobrir conexões diretas via `pymysql`
+- ✨ Validação de credenciais agora **revalida** após o usuário corrigir token ou API Key
+- ✨ Pergunta sobre Frontend adicionada ao fluxo do instalador — Nginx é configurado automaticamente se frontend for selecionado
+- ✨ `"db_port": 3306` adicionado ao `config.json` (campo exigido na versão atual do HubBackend)
 
 ### [1.2.0] — Março 2026
 - ✨ `update-drivershub.sh` — atualiza Backend e/ou Frontend com backup automático
