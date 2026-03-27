@@ -236,6 +236,7 @@ update_backend() {
     source "${BACKEND_INSTALL_DIR}/venv/bin/activate"
     pip install --upgrade pip -q
     pip install -r "${BACKEND_INSTALL_DIR}/requirements.txt" -q
+    pip install cryptography -q  # garante compatibilidade com MySQL 8+
     deactivate
 
     # Reiniciar serviço

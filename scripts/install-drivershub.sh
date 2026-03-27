@@ -541,9 +541,12 @@ install_mysql() {
 
     print_info "Criando banco de dados e usuário..."
 
-    # No MySQL 8+ o root usa auth_socket por padrão — usar sudo mysql
+    # No MySQL 8+ o root usa auth_socket — usar sudo mysql
+    # O usuário é criado com mysql_native_password para compatibilidade com pymysql
+    # (evita o erro: 'cryptography' package required for caching_sha2_password)
     sudo mysql -e "CREATE DATABASE IF NOT EXISTS ${VTC_ABBR}_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
-    sudo mysql -e "CREATE USER IF NOT EXISTS '${VTC_ABBR}_user'@'localhost' IDENTIFIED BY '$DB_PASSWORD';" 2>/dev/null || true
+    sudo mysql -e "DROP USER IF EXISTS '${VTC_ABBR}_user'@'localhost';" 2>/dev/null || true
+    sudo mysql -e "CREATE USER '${VTC_ABBR}_user'@'localhost' IDENTIFIED WITH mysql_native_password BY '$DB_PASSWORD';" 2>/dev/null || true
     sudo mysql -e "GRANT ALL PRIVILEGES ON ${VTC_ABBR}_db.* TO '${VTC_ABBR}_user'@'localhost';" 2>/dev/null || true
     sudo mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
 
@@ -607,23 +610,31 @@ clone_repository() {
 
 setup_python_env() {
     print_step 7 10 "Configurando ambiente Python"
-    
-    cd $INSTALL_DIR
-    
+
+    cd "$INSTALL_DIR"
+
     if [ ! -d "venv" ]; then
         print_info "Criando ambiente virtual..."
         python3 -m venv venv
     fi
-    
+
     print_info "Ativando ambiente virtual..."
+    # shellcheck source=/dev/null
     source venv/bin/activate
-    
+
     print_info "Atualizando pip..."
     pip install --upgrade pip -q
-    
+
     print_info "Instalando dependências Python..."
     pip install -r requirements.txt -q
-    
+
+    # Instalar cryptography explicitamente — necessário para pymysql autenticar
+    # com MySQL 8+ que usa caching_sha2_password por padrão.
+    # Mesmo que já esteja no requirements.txt, garantimos que está instalado e atualizado.
+    print_info "Instalando pacote cryptography (compatibilidade MySQL 8+)..."
+    pip install cryptography -q
+
+    deactivate
     print_success "Ambiente Python configurado"
 }
 
