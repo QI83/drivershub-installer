@@ -34,11 +34,11 @@ cp /opt/drivershub/HubBackend/old.config_sample.json /opt/drivershub/HubBackend/
 # E reconfigure
 ```
 
-**3. MariaDB/Redis não rodando**
+**3. MySQL/Redis não rodando**
 ```bash
-# Iniciar MariaDB
-sudo systemctl start mariadb
-sudo systemctl enable mariadb
+# Iniciar MySQL
+sudo systemctl start mysql
+sudo systemctl enable mysql
 
 # Iniciar Redis
 sudo systemctl start redis-server
@@ -50,11 +50,11 @@ sudo systemctl enable redis-server
 ### 🔴 Erro: "Can't connect to MySQL"
 
 ```bash
-# Verificar se MariaDB está rodando
-sudo systemctl status mariadb
+# Verificar se MySQL está rodando
+sudo systemctl status mysql
 
 # Se não estiver, iniciar
-sudo systemctl start mariadb
+sudo systemctl start mysql
 
 # Verificar usuário e senha
 mysql -u [SIGLA]_user -p [SIGLA]_db
@@ -379,7 +379,7 @@ $(lsb_release -a)
 
 === SERVICOS ===
 $(systemctl status drivershub-[SIGLA] --no-pager)
-$(systemctl status mariadb --no-pager)
+$(systemctl status mysql --no-pager)
 $(systemctl status redis-server --no-pager)
 
 === LOGS ===
@@ -406,7 +406,7 @@ Envie o arquivo `diagnostico.txt` junto com sua dúvida no Discord da comunidade
 Use esta lista para debug sistemático:
 
 ```
-[ ] MariaDB rodando?           sudo systemctl status mariadb
+[ ] MySQL rodando?           sudo systemctl status mysql
 [ ] Redis rodando?             sudo systemctl status redis-server
 [ ] Serviço rodando?           sudo systemctl status drivershub-[SIGLA]
 [ ] config.json válido?        python3 -m json.tool config.json
