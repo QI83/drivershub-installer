@@ -19,7 +19,7 @@ Este script automatiza completamente a instalação do **Drivers Hub Backend** p
 
 ### ✨ O que o script faz automaticamente:
 
-✅ Instala todas as dependências necessárias (Python, MariaDB, Redis)  
+✅ Instala todas as dependências necessárias (Python, MySQL, Redis)  
 ✅ Clona e configura o repositório do Drivers Hub  
 ✅ Cria e configura o banco de dados  
 ✅ Gera o arquivo `config.json` personalizado  
@@ -177,7 +177,7 @@ Porta do servidor [7777]: [Enter para usar 7777]
 
 #### 🔐 Etapa 2: Banco de Dados
 ```
-Senha para o banco de dados MariaDB: ********
+Senha para o banco de dados MySQL: ********
 Confirme a senha: ********
 ```
 
@@ -212,7 +212,7 @@ O script mostrará um resumo. Revise tudo e confirme:
 VTC: CDMP Express (cdmp)
 Domínio: localhost:7777
 Porta: 7777
-Banco de dados: MariaDB (senha configurada)
+Banco de dados: MySQL (senha configurada)
 Discord: 14679556...
 Steam: DE8C49E1...
 Nginx: y
@@ -228,7 +228,7 @@ O script executará automaticamente:
 
 ```
 [PASSO 3/10] ✅ Instalando dependências do sistema
-[PASSO 4/10] ✅ Instalando e configurando MariaDB
+[PASSO 4/10] ✅ Instalando e configurando MySQL
 [PASSO 5/10] ✅ Instalando e configurando Redis
 [PASSO 6/10] ✅ Clonando repositório do Drivers Hub
 [PASSO 7/10] ✅ Configurando ambiente Python
@@ -358,15 +358,15 @@ sudo systemctl status drivershub-cdmp -l
 **Causas comuns:**
 - ❌ Porta já em uso
 - ❌ Erro no config.json
-- ❌ MariaDB/Redis não rodando
+- ❌ MySQL/Redis não rodando
 
 **Solução:**
 ```bash
 # Verificar portas
 sudo lsof -i :7777
 
-# Verificar MariaDB
-sudo systemctl status mariadb
+# Verificar MySQL
+sudo systemctl status mysql
 
 # Verificar Redis
 sudo systemctl status redis-server
