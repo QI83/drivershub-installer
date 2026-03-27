@@ -2,11 +2,12 @@
 
 ################################################################################
 # Script de Instalação Automatizada do Drivers Hub
-# Versão: 1.1.0
+# Versão: 1.2.0
 # Data: Março 2026
 #
 # Este script automatiza a instalação completa do Drivers Hub Backend
 # incluindo configuração de banco de dados, Redis, e serviços.
+# Suporta instalação limpa, reparo de instalação existente e reconfiguração.
 ################################################################################
 
 set -e          # Sair em caso de erro em qualquer comando
@@ -24,6 +25,7 @@ NC='\033[0m' # Sem cor
 # Variáveis globais
 INSTALL_DIR="/opt/drivershub/HubBackend"
 STATE_FILE="/opt/drivershub/.installer_state"
+INSTALL_MODE="fresh"   # fresh | repair | reconfigure
 DB_PASSWORD=""
 VTC_NAME=""
 VTC_ABBR=""
@@ -49,7 +51,7 @@ print_header() {
     echo "║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║"
     echo "║              Euro Truck Simulator 2 / ATS                     ║"
     echo "║                                                               ║"
-    echo "║ Versão: 1.1.0                                                 ║"
+    echo "║ Versão: 1.2.0                                                 ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -99,21 +101,276 @@ check_root() {
     fi
 }
 
+################################################################################
+# Detecção de Instalação Existente — Melhoria 3
+################################################################################
+
+detect_existing_installation() {
+    # Nada encontrado → instalação limpa normal
+    if [[ ! -f "$STATE_FILE" ]] && [[ ! -d "$INSTALL_DIR" ]]; then
+        INSTALL_MODE="fresh"
+        return
+    fi
+
+    clear
+    print_header
+
+    echo -e "${YELLOW}"
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║                                                               ║"
+    echo "║       ⚠️  INSTALAÇÃO EXISTENTE DETECTADA!                    ║"
+    echo "║                                                               ║"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+
+    # Mostrar o que foi encontrado
+    if [[ -f "$STATE_FILE" ]]; then
+        # shellcheck source=/dev/null
+        source "$STATE_FILE"
+        echo -e "  VTC:          ${CYAN}${BACKEND_VTC_NAME} (${BACKEND_VTC_ABBR})${NC}"
+        echo -e "  Backend:      ${CYAN}${BACKEND_INSTALL_DIR}${NC}"
+        echo -e "  Domínio:      ${CYAN}${BACKEND_DOMAIN}${NC}"
+        echo -e "  Instalado em: ${CYAN}${BACKEND_INSTALLED_AT}${NC}"
+
+        # Verificar se o serviço está rodando
+        local svc="drivershub-${BACKEND_VTC_ABBR}"
+        if sudo systemctl is-active --quiet "${svc}.service" 2>/dev/null; then
+            echo -e "  Serviço:      ${GREEN}✅ Rodando${NC}"
+        else
+            echo -e "  Serviço:      ${RED}❌ Parado${NC}"
+        fi
+    else
+        echo -e "  Diretório encontrado: ${CYAN}${INSTALL_DIR}${NC}"
+        echo -e "  (state file ausente — instalação incompleta)"
+    fi
+
+    echo ""
+    echo -e "${MAGENTA}O que deseja fazer?${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  1) Reparar instalação   — corrige dependências, serviço e config"
+    echo "     sem apagar seus dados ou o config.json existente"
+    echo ""
+    echo "  2) Nova instalação      — APAGA tudo e instala do zero"
+    echo "     (use quando quiser mudar VTC, domínio ou senha)"
+    echo ""
+    echo "  3) Cancelar"
+    echo ""
+
+    local choice
+    read -r -p "$(echo -e "${CYAN}Escolha [1/2/3]: ${NC}")" choice
+
+    case "$choice" in
+        1)
+            INSTALL_MODE="repair"
+            print_info "Modo: Reparo — dados e config.json preservados."
+
+            # Carregar variáveis do state para reutilizar na instalação
+            if [[ -f "$STATE_FILE" ]]; then
+                VTC_NAME="$BACKEND_VTC_NAME"
+                VTC_ABBR="$BACKEND_VTC_ABBR"
+                DOMAIN="$BACKEND_DOMAIN"
+                PORT="$BACKEND_PORT"
+                INSTALL_NGINX="$BACKEND_INSTALL_NGINX"
+                INSTALL_SSL="$BACKEND_INSTALL_SSL"
+
+                # Carregar credenciais do config.json existente
+                if [[ -f "${BACKEND_INSTALL_DIR}/config.json" ]]; then
+                    DB_PASSWORD=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('${BACKEND_INSTALL_DIR}/config.json'))
+    print(d.get('db_password',''))
+except: print('')
+" 2>/dev/null || echo "")
+                    DISCORD_CLIENT_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('${BACKEND_INSTALL_DIR}/config.json'))
+    print(d.get('discord_client_id',''))
+except: print('')
+" 2>/dev/null || echo "")
+                    DISCORD_CLIENT_SECRET=$(python3 -c "
+import json
+try:
+    d = json.load(open('${BACKEND_INSTALL_DIR}/config.json'))
+    print(d.get('discord_client_secret',''))
+except: print('')
+" 2>/dev/null || echo "")
+                    DISCORD_BOT_TOKEN=$(python3 -c "
+import json
+try:
+    d = json.load(open('${BACKEND_INSTALL_DIR}/config.json'))
+    print(d.get('discord_bot_token',''))
+except: print('')
+" 2>/dev/null || echo "")
+                    DISCORD_GUILD_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('${BACKEND_INSTALL_DIR}/config.json'))
+    print(d.get('discord_guild_id',''))
+except: print('')
+" 2>/dev/null || echo "")
+                    STEAM_API_KEY=$(python3 -c "
+import json
+try:
+    d = json.load(open('${BACKEND_INSTALL_DIR}/config.json'))
+    print(d.get('steam_api_key',''))
+except: print('')
+" 2>/dev/null || echo "")
+                fi
+            fi
+            ;;
+        2)
+            INSTALL_MODE="fresh"
+            print_warning "Modo: Nova instalação — dados existentes serão sobrescritos."
+            if ! confirm "Tem certeza? O config.json atual será substituído" "n"; then
+                print_warning "Cancelado."
+                exit 0
+            fi
+            ;;
+        3|"")
+            print_warning "Instalação cancelada."
+            exit 0
+            ;;
+        *)
+            print_error "Opção inválida."
+            exit 1
+            ;;
+    esac
+}
+
+################################################################################
+# Validação de Credenciais Discord e Steam — Melhoria 4
+################################################################################
+
+validate_credentials() {
+    print_step 2 10 "Validando credenciais Discord e Steam"
+
+    local errors=0
+
+    # ── Discord Bot Token ──────────────────────────────────────────────────────
+    print_info "Validando Discord Bot Token..."
+    local discord_response http_code
+    discord_response=$(curl -s -w "\n%{http_code}" \
+        -H "Authorization: Bot ${DISCORD_BOT_TOKEN}" \
+        "https://discord.com/api/v10/users/@me" \
+        --max-time 10 2>/dev/null) || true
+
+    http_code=$(echo "$discord_response" | tail -1)
+    local discord_body
+    discord_body=$(echo "$discord_response" | head -n -1)
+
+    if [[ "$http_code" == "200" ]]; then
+        local bot_username
+        bot_username=$(echo "$discord_body" | python3 -c \
+            "import json,sys; d=json.load(sys.stdin); print(d.get('username','?'))" \
+            2>/dev/null || echo "?")
+        print_success "Discord Bot Token válido — Bot: ${bot_username}"
+    elif [[ "$http_code" == "401" ]]; then
+        print_error "Discord Bot Token INVÁLIDO! Verifique o token no Discord Developer Portal."
+        errors=$((errors + 1))
+    else
+        print_warning "Não foi possível validar o Bot Token (HTTP ${http_code:-timeout}). Continuando mesmo assim."
+    fi
+
+    # ── Discord Client ID + Secret ─────────────────────────────────────────────
+    print_info "Validando Discord Client ID e Secret..."
+    local client_response client_code
+    client_response=$(curl -s -w "\n%{http_code}" \
+        -u "${DISCORD_CLIENT_ID}:${DISCORD_CLIENT_SECRET}" \
+        "https://discord.com/api/v10/oauth2/applications/@me" \
+        --max-time 10 2>/dev/null) || true
+
+    client_code=$(echo "$client_response" | tail -1)
+    local client_body
+    client_body=$(echo "$client_response" | head -n -1)
+
+    if [[ "$client_code" == "200" ]]; then
+        local app_name
+        app_name=$(echo "$client_body" | python3 -c \
+            "import json,sys; d=json.load(sys.stdin); print(d.get('name','?'))" \
+            2>/dev/null || echo "?")
+        print_success "Discord Client ID/Secret válidos — App: ${app_name}"
+    elif [[ "$client_code" == "401" ]]; then
+        print_error "Discord Client ID ou Client Secret INVÁLIDO!"
+        errors=$((errors + 1))
+    else
+        print_warning "Não foi possível validar Client ID/Secret (HTTP ${client_code:-timeout}). Continuando mesmo assim."
+    fi
+
+    # ── Steam API Key ──────────────────────────────────────────────────────────
+    print_info "Validando Steam API Key..."
+    local steam_response steam_code
+    steam_response=$(curl -s -w "\n%{http_code}" \
+        "https://api.steampowered.com/ISteamWebAPIUtil/GetSupportedAPIList/v1/?key=${STEAM_API_KEY}" \
+        --max-time 10 2>/dev/null) || true
+
+    steam_code=$(echo "$steam_response" | tail -1)
+    local steam_body
+    steam_body=$(echo "$steam_response" | head -n -1)
+
+    if [[ "$steam_code" == "200" ]] && echo "$steam_body" | grep -q "apilist"; then
+        print_success "Steam API Key válida"
+    elif echo "$steam_body" | grep -qi "forbidden\|unauthorized\|invalid"; then
+        print_error "Steam API Key INVÁLIDA! Obtenha uma em: https://steamcommunity.com/dev/apikey"
+        errors=$((errors + 1))
+    else
+        print_warning "Não foi possível validar Steam API Key (HTTP ${steam_code:-timeout}). Continuando mesmo assim."
+    fi
+
+    echo ""
+
+    if [[ $errors -gt 0 ]]; then
+        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        print_error "$errors credencial(is) inválida(s) detectada(s)!"
+        echo ""
+        echo "  Corrigir agora evita problemas no login Discord e nas integrações."
+        echo ""
+        if confirm "Deseja corrigir as credenciais antes de continuar?" "y"; then
+            # Recoletar apenas os campos com erro
+            if [[ "$http_code" == "401" || "$client_code" == "401" ]]; then
+                echo -e "\n${MAGENTA}🔐 Corrija suas credenciais Discord${NC}"
+                echo "  Portal: https://discord.com/developers/applications"
+                read -r -p "$(echo -e "${CYAN}Discord Client ID: ${NC}")"     DISCORD_CLIENT_ID
+                read -r -p "$(echo -e "${CYAN}Discord Client Secret: ${NC}")" DISCORD_CLIENT_SECRET
+                read -r -p "$(echo -e "${CYAN}Discord Bot Token: ${NC}")"     DISCORD_BOT_TOKEN
+            fi
+            if echo "$steam_body" | grep -qi "forbidden\|unauthorized\|invalid"; then
+                echo -e "\n${MAGENTA}🔐 Corrija sua Steam API Key${NC}"
+                echo "  Portal: https://steamcommunity.com/dev/apikey"
+                read -r -p "$(echo -e "${CYAN}Steam API Key: ${NC}")" STEAM_API_KEY
+            fi
+            # Não revalida para não entrar em loop — o usuário confirmou
+            print_info "Credenciais atualizadas. Prosseguindo com a instalação."
+        else
+            print_warning "Prosseguindo com credenciais inválidas. O login Discord pode não funcionar."
+        fi
+    else
+        print_success "Todas as credenciais validadas com sucesso!"
+    fi
+}
+
 check_requirements() {
     print_step 1 10 "Verificando requisitos do sistema"
-    
+
     # Verificar se é Ubuntu/Debian
     if ! command -v apt &> /dev/null; then
         print_error "Este script requer Ubuntu/Debian (sistema com apt)"
         exit 1
     fi
-    
+
     # Verificar versão do Ubuntu
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         print_info "Sistema detectado: $PRETTY_NAME"
     fi
-    
+
+    # Em modo reparo, verificar curl (necessário para validação de credenciais)
+    if ! command -v curl &>/dev/null; then
+        print_info "Instalando curl..."
+        sudo apt-get install -y curl -qq
+    fi
+
     print_success "Requisitos do sistema verificados"
 }
 
@@ -122,74 +379,89 @@ check_requirements() {
 ################################################################################
 
 collect_info() {
+    # Modo reparo: dados já foram carregados do state/config — apenas confirmar
+    if [[ "$INSTALL_MODE" == "repair" ]]; then
+        print_step 2 10 "Confirmando configurações existentes (modo reparo)"
+        echo ""
+        echo -e "  VTC:       ${CYAN}${VTC_NAME} (${VTC_ABBR})${NC}"
+        echo -e "  Domínio:   ${CYAN}${DOMAIN}${NC}"
+        echo -e "  Porta:     ${CYAN}${PORT}${NC}"
+        echo -e "  Discord:   ${CYAN}${DISCORD_CLIENT_ID:0:8}...${NC}"
+        echo -e "  Steam:     ${CYAN}${STEAM_API_KEY:0:8}...${NC}"
+        echo -e "  Nginx:     ${CYAN}${INSTALL_NGINX}${NC}"
+        echo ""
+        print_success "Configurações carregadas da instalação anterior"
+        return
+    fi
+
     print_step 2 10 "Coletando informações da instalação"
-    
+
     echo -e "\n${MAGENTA}📋 INFORMAÇÕES DA SUA VTC${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     # Nome da VTC
     while [[ -z "$VTC_NAME" ]]; do
         read -r -p "$(echo -e "${CYAN}Nome completo da VTC: ${NC}")" VTC_NAME
     done
-    
+
     # Abreviação
     while [[ -z "$VTC_ABBR" ]]; do
         read -r -p "$(echo -e "${CYAN}Abreviação da VTC (ex: cdmp): ${NC}")" VTC_ABBR
         VTC_ABBR=$(echo "$VTC_ABBR" | tr '[:upper:]' '[:lower:]')
     done
-    
+
     # Domínio
     read -r -p "$(echo -e "${CYAN}Domínio (deixe vazio para localhost): ${NC}")" DOMAIN
     # Remover protocolo e barras que o usuário possa ter digitado
     DOMAIN=$(echo "$DOMAIN" | sed 's|https\?://||' | sed 's|/$||' | tr -d ' ')
     DOMAIN=${DOMAIN:-localhost}
-    
+
     # Porta
     read -r -p "$(echo -e "${CYAN}Porta do servidor [7777]: ${NC}")" input_port
     PORT=${input_port:-7777}
-    
+
     echo -e "\n${MAGENTA}🔐 CREDENCIAIS DO BANCO DE DADOS${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     # Senha do banco
     while [[ -z "$DB_PASSWORD" ]]; do
         read -r -sp "$(echo -e "${CYAN}Senha para o banco de dados MySQL: ${NC}")" DB_PASSWORD
         echo
         read -r -sp "$(echo -e "${CYAN}Confirme a senha: ${NC}")" DB_PASSWORD_CONFIRM
         echo
-        
+
         if [[ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]]; then
             print_error "As senhas não coincidem!"
             DB_PASSWORD=""
         fi
     done
-    
+
     echo -e "\n${MAGENTA}🎮 INTEGRAÇÃO DISCORD & STEAM${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_info "Obtenha estas informações em:"
     print_info "Discord: https://discord.com/developers/applications"
     print_info "Steam: https://steamcommunity.com/dev/apikey"
     echo
-    
-    read -r -p "$(echo -e "${CYAN}Discord Client ID: ${NC}")" DISCORD_CLIENT_ID
+
+    read -r -p "$(echo -e "${CYAN}Discord Client ID: ${NC}")"     DISCORD_CLIENT_ID
     read -r -p "$(echo -e "${CYAN}Discord Client Secret: ${NC}")" DISCORD_CLIENT_SECRET
-    read -r -p "$(echo -e "${CYAN}Discord Bot Token: ${NC}")" DISCORD_BOT_TOKEN
+    read -r -p "$(echo -e "${CYAN}Discord Bot Token: ${NC}")"     DISCORD_BOT_TOKEN
     read -r -p "$(echo -e "${CYAN}Discord Server (Guild) ID: ${NC}")" DISCORD_GUILD_ID
-    read -r -p "$(echo -e "${CYAN}Steam API Key: ${NC}")" STEAM_API_KEY
-    
+    read -r -p "$(echo -e "${CYAN}Steam API Key: ${NC}")"         STEAM_API_KEY
+
     echo -e "\n${MAGENTA}⚙️  CONFIGURAÇÕES OPCIONAIS${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     if confirm "Deseja instalar e configurar Nginx como proxy reverso?"; then
         INSTALL_NGINX="y"
     fi
-    
+
     if [[ "$INSTALL_NGINX" == "y" ]] && [[ "$DOMAIN" != "localhost"* ]]; then
         if confirm "Deseja configurar SSL/HTTPS com Let's Encrypt?"; then
             INSTALL_SSL="y"
         fi
     fi
-    
+
     # Resumo
     echo -e "\n${GREEN}📊 RESUMO DA INSTALAÇÃO${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -202,12 +474,12 @@ collect_info() {
     echo "Nginx: $INSTALL_NGINX"
     echo "SSL: $INSTALL_SSL"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     if ! confirm "Confirma as informações acima e deseja continuar?"; then
         print_warning "Instalação cancelada pelo usuário"
         exit 0
     fi
-    
+
     print_success "Informações coletadas"
 }
 
@@ -375,12 +647,19 @@ fix_database_code() {
 
 create_config_file() {
     print_step 9 10 "Criando arquivo de configuração"
-    
-    cd $INSTALL_DIR
-    
+
+    cd "$INSTALL_DIR"
+
+    # Modo reparo: preservar o config.json existente
+    if [[ "$INSTALL_MODE" == "repair" ]] && [[ -f "config.json" ]]; then
+        print_info "Modo reparo — config.json existente preservado."
+        print_success "Arquivo config.json mantido sem alterações"
+        return
+    fi
+
     # Gerar secret key aleatória
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-    
+
     print_info "Gerando config.json..."
     
     cat > config.json << EOF
@@ -758,8 +1037,14 @@ main() {
     check_root
     check_requirements
 
-    # Coletar informações
+    # Detectar instalação existente e definir INSTALL_MODE
+    detect_existing_installation
+
+    # Coletar informações (pula em modo reparo, que reutiliza dados existentes)
     collect_info
+
+    # Validar credenciais Discord e Steam antes de instalar
+    validate_credentials
 
     # Executar instalação
     install_system_dependencies
