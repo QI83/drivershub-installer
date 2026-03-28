@@ -167,19 +167,19 @@ Se alguma credencial estiver inválida, o script avisa, permite corrigir os camp
 ### Exemplo de preenchimento
 
 ```
-Nome completo da VTC: CDMP Express
-Abreviação da VTC (ex: cdmp): cdmp
+Nome completo da VTC: Minha VTC
+Abreviação da VTC (ex: cdmp): vtc
 Domínio (deixe vazio para localhost): hub.minhaVTC.com
 Porta do servidor [7777]: [Enter]
 
 Senha para o banco de dados MySQL: ************
 Confirme a senha: ************
 
-Discord Client ID: 1467955638989623468
-Discord Client Secret: FnhXn1dZxDEi1YvkVBq954kVpan454Et
-Discord Bot Token: MTQ2Nzk1NTYzODk4OTYyMzQ2OA.G1EIDK...
-Discord Server (Guild) ID: 1465781784728830192
-Steam API Key: DE8C49E18E84FF620514813E035F4BC5
+Discord Client ID: XXXXXXXXXXXXXXXXXXX
+Discord Client Secret: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+Discord Bot Token: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...
+Discord Server (Guild) ID: XXXXXXXXXXXXXXXXXXX
+Steam API Key: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 ⚙️  CONFIGURAÇÕES OPCIONAIS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -201,7 +201,7 @@ Se o script detectar uma instalação anterior, exibirá um menu:
 ```
 ⚠️  INSTALAÇÃO EXISTENTE DETECTADA!
 
-  VTC:          CDMP Express (cdmp)
+  VTC:          Minha VTC (vtc)
   Serviço:      ✅ Rodando
 
 O que deseja fazer?
@@ -441,7 +441,7 @@ nano ~/backup-drivershub.sh
 
 ```bash
 #!/bin/bash
-SIGLA="cdmp"
+SIGLA="vtc"
 DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="/opt/drivershub/backups"
 
