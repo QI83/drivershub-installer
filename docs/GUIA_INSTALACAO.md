@@ -373,8 +373,8 @@ sudo systemctl restart drivershub-[SIGLA]
 # Modo debug manual
 sudo systemctl stop drivershub-[SIGLA]
 cd /opt/drivershub/HubBackend/src
-source venv/bin/activate
-python3 src/main.py --config config.json
+source ../venv/bin/activate
+python3 main.py --config ../config.json
 ```
 
 ### MySQL
