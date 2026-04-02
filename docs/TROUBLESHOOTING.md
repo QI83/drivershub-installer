@@ -76,6 +76,84 @@ bash scripts/install-drivershub.sh
 
 ---
 
+## 🔴 Erro: "Table 'X_db.settings' doesn't exist"
+
+Este é o erro mais comum após uma instalação ou reinstalação. Ocorre porque o `db.py` contém cláusulas `DATA DIRECTORY` que o MySQL rejeita, impedindo a criação das tabelas.
+
+**Passo 1 — Verificar se o patch foi aplicado**
+```bash
+grep -c "DATA DIRECTORY = '" /opt/drivershub/HubBackend/src/db.py
+# Se retornar > 0: patch NÃO aplicado → execute o Fix abaixo
+# Se retornar 0:  patch OK → vá para "Criar tabelas manualmente"
+```
+
+**Passo 2 — Aplicar o patch DATA DIRECTORY**
+```bash
+sudo python3 - << 'PYEOF'
+fname = '/opt/drivershub/HubBackend/src/db.py'
+with open(fname, 'r') as f:
+    content = f.read()
+# Cobrir ambas as variações do código fonte
+patched = content.replace(" DATA DIRECTORY = '{config.db_data_directory}'", "")
+patched = patched.replace(" DATA DIRECTORY = '{app.config.db_data_directory}'", "")
+with open(fname, 'w') as f:
+    f.write(patched)
+remaining = patched.count("DATA DIRECTORY = '")
+print(f"Patch aplicado. Ocorrências SQL restantes: {remaining}")
+PYEOF
+
+# Confirmar: deve retornar 0
+grep -c "DATA DIRECTORY = '" /opt/drivershub/HubBackend/src/db.py
+```
+
+**Passo 3 — Criar as tabelas manualmente**
+
+Mesmo após o patch, as tabelas precisam ser criadas se o banco estiver vazio:
+
+```bash
+cd /opt/drivershub/HubBackend/src
+source ../venv/bin/activate
+
+python3 - << 'PYEOF'
+import json, sys
+sys.path.insert(0, '.')
+import db
+
+cfg = json.load(open('../config.json'))
+
+class Cfg:
+    def __init__(self, c):
+        self.db_host           = c.get('db_host', 'localhost')
+        self.db_port           = int(c.get('db_port', 3306))
+        self.db_user           = c.get('db_user', '')
+        self.db_password       = c.get('db_password', '')
+        self.db_name           = c.get('db_name', '')
+        self.db_data_directory = ''
+        self.db_pool_size      = int(c.get('db_pool_size', 10))
+
+try:
+    db.init(Cfg(cfg), '2.11.1')
+    print('TABELAS CRIADAS COM SUCESSO')
+except Exception as e:
+    print(f'ERRO: {e}')
+PYEOF
+
+deactivate
+```
+
+**Passo 4 — Confirmar e reiniciar**
+```bash
+# Deve listar ~43 tabelas
+sudo mysql -e "SHOW TABLES FROM [SIGLA]_db;" | wc -l
+
+sudo systemctl restart drivershub-[SIGLA]
+sleep 10
+sudo journalctl -u drivershub-[SIGLA] -n 10 --no-pager
+# Deve mostrar: Application startup complete.
+```
+
+---
+
 ## 🔴 Erro: "Can't connect to MySQL"
 
 ```bash
