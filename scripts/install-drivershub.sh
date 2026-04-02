@@ -558,18 +558,21 @@ install_mysql() {
 
     print_info "Criando banco de dados e usuário..."
 
-    # No MySQL 8+ o root usa auth_socket — usar sudo mysql
-    # O usuário é criado com mysql_native_password para compatibilidade com pymysql
-    # (evita o erro: 'cryptography' package required for caching_sha2_password)
+    # Criar banco de dados
     sudo mysql -e "CREATE DATABASE IF NOT EXISTS ${VTC_ABBR}_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
+
+    # Remover usuário anterior (se existir) para garantir criação limpa
     sudo mysql -e "DROP USER IF EXISTS '${VTC_ABBR}_user'@'localhost';" 2>/dev/null || true
-    sudo mysql -e "CREATE USER '${VTC_ABBR}_user'@'localhost' IDENTIFIED WITH mysql_native_password BY '$DB_PASSWORD';" 2>/dev/null || true
+
+    # Tentar criar com mysql_native_password (MySQL 8.0.x)
+    # Se falhar (MySQL 8.4+ removeu o plugin), usar autenticação padrão com cryptography
+    if ! sudo mysql -e "CREATE USER '${VTC_ABBR}_user'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_PASSWORD}';" 2>/dev/null; then
+        print_warning "mysql_native_password indisponível (MySQL 8.4+). Usando autenticação padrão..."
+        sudo mysql -e "CREATE USER '${VTC_ABBR}_user'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';" 2>/dev/null || true
+    fi
+
     sudo mysql -e "GRANT ALL PRIVILEGES ON ${VTC_ABBR}_db.* TO '${VTC_ABBR}_user'@'localhost';" 2>/dev/null || true
     sudo mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
-
-    # Forçar mysql_native_password globalmente para novas conexões via pymysql
-    # (o plugin client-config.py também usa pymysql diretamente)
-    sudo mysql -e "SET GLOBAL default_authentication_plugin='mysql_native_password';" 2>/dev/null || true
 
     # Verificar se o banco foi criado com sucesso
     if sudo mysql -e "USE ${VTC_ABBR}_db;" 2>/dev/null; then
@@ -611,21 +614,21 @@ install_redis() {
 
 clone_repository() {
     print_step 6 10 "Clonando repositório do Drivers Hub"
-    
+
     # Criar diretório
     sudo mkdir -p /opt/drivershub
-    sudo chown $USER:$USER /opt/drivershub
-    
+    sudo chown "$USER":"$USER" /opt/drivershub
+
     if [ -d "$INSTALL_DIR" ]; then
         print_warning "Diretório já existe. Atualizando..."
-        cd $INSTALL_DIR
+        cd "$INSTALL_DIR"
         git pull
     else
         print_info "Clonando repositório..."
         cd /opt/drivershub
         git clone https://github.com/CharlesWithC/HubBackend.git
     fi
-    
+
     print_success "Repositório clonado/atualizado"
 }
 
@@ -647,33 +650,185 @@ setup_python_env() {
     print_info "Atualizando pip..."
     pip install --upgrade pip -q < /dev/null
 
-    print_info "Instalando dependências Python..."
-    pip install -r requirements.txt -q < /dev/null
+    # Gerar requirements sem os pacotes de dev (nuitka, ruff) que são pesados
+    # e não são necessários para execução — apenas para desenvolvimento
+    print_info "Instalando dependências Python (pode levar alguns minutos)..."
+    grep -v '# dev' requirements.txt > /tmp/requirements_prod.txt
+    pip install -r /tmp/requirements_prod.txt < /dev/null
+    rm -f /tmp/requirements_prod.txt
 
-    # Instalar cryptography explicitamente — necessário para pymysql autenticar
-    # com MySQL 8+ que usa caching_sha2_password por padrão.
+    # Garantir cryptography para autenticação MySQL 8+
     print_info "Instalando pacote cryptography (compatibilidade MySQL 8+)..."
     pip install cryptography -q < /dev/null
 
-    deactivate
+    deactivate || true
     print_success "Ambiente Python configurado"
 }
 
 fix_database_code() {
     print_step 8 10 "Aplicando correção no código (DATA DIRECTORY)"
-    
-    cd $INSTALL_DIR/src
-    
-    if [ ! -f "db.py.backup" ]; then
-        print_info "Criando backup do db.py..."
+
+    cd "$INSTALL_DIR/src"
+
+    # Verificar se o patch precisa ser aplicado
+    # IMPORTANTE: usar Python em vez de sed — o padrão exato das aspas no arquivo
+    # pode variar entre versões e sed falha silenciosamente com variações de escape.
+    # O arquivo usa: DATA DIRECTORY = '{config.db_data_directory}'  (sem app.)
+    if grep -q "DATA DIRECTORY = '" db.py; then
+        print_info "Criando backup do db.py original..."
         cp db.py db.py.backup
-        
-        print_info "Removendo cláusulas DATA DIRECTORY..."
-        sed -i "s/ DATA DIRECTORY = '{app.config.db_data_directory}'//g" db.py
-        
-        print_success "Correção aplicada"
+
+        print_info "Removendo cláusulas DATA DIRECTORY via Python..."
+        python3 - << 'PYEOF'
+fname = 'db.py'
+with open(fname, 'r') as f:
+    content = f.read()
+# Cobrir ambas as variações encontradas no código fonte:
+# versão antiga: DATA DIRECTORY = '{app.config.db_data_directory}'
+# versão atual:  DATA DIRECTORY = '{config.db_data_directory}'
+patched = content.replace(" DATA DIRECTORY = '{config.db_data_directory}'", "")
+patched = patched.replace(" DATA DIRECTORY = '{app.config.db_data_directory}'", "")
+remaining = patched.count("DATA DIRECTORY = '")
+with open(fname, 'w') as f:
+    f.write(patched)
+print(f"Patch aplicado. Ocorrências SQL restantes: {remaining}")
+if remaining > 0:
+    raise SystemExit(f"ERRO: ainda há {remaining} ocorrências de DATA DIRECTORY")
+PYEOF
+        print_success "Correção DATA DIRECTORY aplicada"
     else
-        print_info "Correção já foi aplicada anteriormente"
+        print_info "Correção DATA DIRECTORY já está aplicada no db.py"
+    fi
+}
+
+fix_client_config_plugin() {
+    # CORREÇÃO DEFINITIVA para "inoperância temporária":
+    # O plugin client-config.py salva api_host como config["domain"] = "localhost"
+    # sem protocolo. O frontend monta apiPath = "localhost/cdmp" que o browser
+    # interpreta como URL relativa → todas as chamadas de API vão para o caminho errado.
+    # Este patch altera o fonte para incluir o protocolo: "http://localhost".
+
+    local plugin_file="$INSTALL_DIR/src/external_plugins/client-config.py"
+
+    if [[ ! -f "$plugin_file" ]]; then
+        print_warning "Plugin client-config.py não encontrado — pulando patch."
+        return
+    fi
+
+    local protocol="http"
+    [[ "$INSTALL_SSL" == "y" ]] && protocol="https"
+
+    # Verificar se o patch correto já está aplicado
+    if grep -qF "\"${protocol}://\" + config[\"domain\"]" "$plugin_file"; then
+        print_info "Patch client-config.py já está correto (${protocol}://)"
+        return
+    fi
+
+    # Backup na primeira vez
+    [[ ! -f "${plugin_file}.bak" ]] && cp "$plugin_file" "${plugin_file}.bak"
+
+    # Restaurar do backup antes de aplicar (protocolo pode ter mudado de http para https)
+    cp "${plugin_file}.bak" "$plugin_file"
+
+    # Aplicar via Python — mais confiável que sed com strings complexas
+    python3 - "$plugin_file" "$protocol" << 'PYEOF'
+import sys
+fname, protocol = sys.argv[1], sys.argv[2]
+with open(fname, 'r') as f:
+    content = f.read()
+# Padrão atual no código fonte do CharlesWithC:
+old = '"api_host": config["domain"]'
+new = f'"api_host": "{protocol}://" + config["domain"]'
+if old not in content:
+    print(f"AVISO: padrão não encontrado em {fname} — nenhuma alteração feita.")
+    sys.exit(0)
+patched = content.replace(old, new)
+with open(fname, 'w') as f:
+    f.write(patched)
+print(f"Patch aplicado: api_host incluirá {protocol}://")
+PYEOF
+
+    if grep -qF "\"${protocol}://\" + config[\"domain\"]" "$plugin_file"; then
+        print_success "Patch client-config.py aplicado: api_host incluirá ${protocol}://"
+    else
+        print_warning "Patch client-config.py não foi aplicado — edite manualmente:"
+        print_warning "  Arquivo: $plugin_file"
+        print_warning "  Linha:   \"api_host\": config[\"domain\"]"
+        print_warning "  Para:    \"api_host\": \"${protocol}://\" + config[\"domain\"]"
+    fi
+}
+
+create_database_tables() {
+    # Cria todas as tabelas do banco via db.init() do próprio HubBackend.
+    # Isso é feito ANTES de iniciar o serviço systemd para garantir que
+    # as tabelas existam na primeira tentativa de inicialização.
+    # Sem isso, o backend falha com "Table 'X_db.settings' doesn't exist"
+    # porque o db.init() no startup do app pode falhar silenciosamente.
+
+    print_info "Criando tabelas do banco de dados via db.init()..."
+
+    cd "$INSTALL_DIR/src"
+
+    # shellcheck source=/dev/null
+    source "$INSTALL_DIR/venv/bin/activate"
+
+    python3 - "$INSTALL_DIR/config.json" << 'PYEOF'
+import sys, json
+sys.path.insert(0, '.')
+
+try:
+    import db
+    import inspect
+
+    cfg = json.load(open(sys.argv[1]))
+
+    class Cfg:
+        def __init__(self, c):
+            self.db_host           = c.get('db_host', 'localhost')
+            self.db_port           = int(c.get('db_port', 3306))
+            self.db_user           = c.get('db_user', '')
+            self.db_password       = c.get('db_password', '')
+            self.db_name           = c.get('db_name', '')
+            self.db_data_directory = ''
+            self.db_pool_size      = int(c.get('db_pool_size', 10))
+
+    config_obj = Cfg(cfg)
+
+    # Detectar assinatura real do db.init() para compatibilidade com versões futuras
+    sig = inspect.signature(db.init)
+    params = list(sig.parameters.keys())
+
+    if len(params) >= 2:
+        # Versão atual: db.init(config, version)
+        db.init(config_obj, '2.11.1')
+    else:
+        # Versão antiga: db.init(app)
+        class App:
+            def __init__(self, c): self.config = c
+        db.init(App(config_obj))
+
+    print('OK: tabelas criadas/verificadas com sucesso')
+
+except Exception as e:
+    print(f'ERRO: {e}')
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+PYEOF
+
+    local db_exit=$?
+    deactivate || true
+
+    if [[ $db_exit -eq 0 ]]; then
+        local table_count
+        table_count=$(sudo mysql -N -s -e \
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${VTC_ABBR}_db';" \
+            2>/dev/null | tr -d '[:space:]' || echo "0")
+        print_success "Banco de dados inicializado — ${table_count} tabelas"
+    else
+        print_error "Falha ao criar tabelas. Verifique a conexão com MySQL e as credenciais."
+        print_error "Tente manualmente: mysql -u ${VTC_ABBR}_user -p ${VTC_ABBR}_db"
+        exit 1
     fi
 }
 
@@ -838,9 +993,12 @@ EOF
 
 create_systemd_service() {
     print_step 10 10 "Configurando serviço systemd"
-    
+
     print_info "Criando arquivo de serviço..."
-    
+
+    # WorkingDirectory deve ser $INSTALL_DIR/src para que os.path.exists("external_plugins/...")
+    # no app.py resolva corretamente para src/external_plugins/ onde os plugins estão.
+    # O config.json fica em $INSTALL_DIR, por isso usamos ../config.json no ExecStart.
     sudo tee /etc/systemd/system/drivershub-${VTC_ABBR}.service > /dev/null << EOF
 [Unit]
 Description=$VTC_NAME - Drivers Hub Backend
@@ -849,9 +1007,9 @@ After=network.target mysql.service redis.service
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$INSTALL_DIR
+WorkingDirectory=$INSTALL_DIR/src
 Environment="PATH=$INSTALL_DIR/venv/bin"
-ExecStart=$INSTALL_DIR/venv/bin/python3 src/main.py --config config.json
+ExecStart=$INSTALL_DIR/venv/bin/python3 main.py --config ../config.json
 Restart=always
 RestartSec=10
 
@@ -861,21 +1019,95 @@ EOF
 
     print_info "Recarregando systemd..."
     sudo systemctl daemon-reload
-    
+
     print_info "Habilitando serviço..."
     sudo systemctl enable drivershub-${VTC_ABBR}.service
-    
+
+    # Parar o serviço se já estiver rodando (reinstalação)
+    # Necessário para que o novo WorkingDirectory e ExecStart entrem em vigor
+    if sudo systemctl is-active --quiet drivershub-${VTC_ABBR}.service 2>/dev/null; then
+        print_info "Parando serviço existente para aplicar atualização..."
+        sudo systemctl stop drivershub-${VTC_ABBR}.service
+        sleep 2
+    fi
+
     print_info "Iniciando serviço..."
     sudo systemctl start drivershub-${VTC_ABBR}.service
-    
-    sleep 3
-    
-    if sudo systemctl is-active --quiet drivershub-${VTC_ABBR}.service; then
-        print_success "Serviço iniciado com sucesso"
+
+    # Aguardar o serviço inicializar — loop de até 30s para cobrir compilação inicial
+    print_info "Aguardando inicialização (pode levar alguns segundos)..."
+    local attempt=0
+    while [[ $attempt -lt 15 ]]; do
+        sleep 2
+        attempt=$((attempt + 1))
+        if sudo systemctl is-active --quiet drivershub-${VTC_ABBR}.service; then
+            print_success "Serviço iniciado com sucesso"
+            return
+        fi
+    done
+
+    print_error "Falha ao iniciar serviço. Verificando logs..."
+    sudo journalctl -u drivershub-${VTC_ABBR}.service -n 20
+    exit 1
+}
+
+fix_client_config_api_host() {
+    # O plugin client-config.py salva api_host sem protocolo (ex: "localhost").
+    # O frontend monta apiPath = api_host + "/" + abbr — sem protocolo o browser
+    # interpreta como URL relativa e resolve para o caminho errado.
+    # Este fix aguarda a entrada ser criada e atualiza para o valor correto.
+
+    local protocol="http"
+    [[ "$INSTALL_SSL" == "y" ]] && protocol="https"
+    local correct_api_host="${protocol}://${DOMAIN}"
+
+    print_info "Aguardando plugin client-config criar entrada no banco (até 60s)..."
+
+    # Aguardar até 60s (30 tentativas × 2s) para a entrada ser criada
+    local attempt=0
+    local entry_exists=0
+    while [[ $attempt -lt 30 ]]; do
+        sleep 2
+        attempt=$((attempt + 1))
+        local count
+        # -N: sem cabeçalho, -s: modo silencioso (sem formatação extra)
+        # tr -d: remove qualquer whitespace residual do output do mysql
+        count=$(sudo mysql -N -s -e \
+            "SELECT COUNT(*) FROM \`${VTC_ABBR}_db\`.settings WHERE skey='client-config/meta';" \
+            2>/dev/null | tr -d '[:space:]' || echo "0")
+        if [[ "$count" == "1" ]]; then
+            entry_exists=1
+            break
+        fi
+        # Mostrar progresso a cada 10s
+        if (( attempt % 5 == 0 )); then
+            print_info "Aguardando inicialização do backend... (${attempt}x2s)"
+        fi
+    done
+
+    if [[ $entry_exists -eq 1 ]]; then
+        print_info "Corrigindo api_host para: ${correct_api_host}..."
+        sudo mysql -e \
+            "UPDATE \`${VTC_ABBR}_db\`.settings \
+             SET sval = JSON_SET(sval, '\$.api_host', '${correct_api_host}') \
+             WHERE skey='client-config/meta';" 2>/dev/null || true
+
+        # Limpar cache Redis para o frontend receber o valor corrigido imediatamente
+        redis-cli DEL "client-config:meta" >/dev/null 2>&1 || true
+
+        print_success "api_host corrigido para: ${correct_api_host}"
+
+        # Reiniciar o serviço para garantir que o Redis foi limpo e novo cache gerado
+        print_info "Reiniciando serviço para aplicar configuração..."
+        sudo systemctl restart "drivershub-${VTC_ABBR}.service" 2>/dev/null || true
+        sleep 3
     else
-        print_error "Falha ao iniciar serviço. Verificando logs..."
-        sudo journalctl -u drivershub-${VTC_ABBR}.service -n 20
-        exit 1
+        print_warning "Entrada client-config não encontrada no banco após 60s."
+        print_warning "Execute manualmente após verificar os logs do serviço:"
+        print_warning "  sudo journalctl -u drivershub-${VTC_ABBR} -n 30"
+        print_warning "  sudo mysql -e \"UPDATE ${VTC_ABBR}_db.settings SET sval = JSON_SET(sval, '\$.api_host', '${correct_api_host}') WHERE skey='client-config/meta';\""
+        print_warning "  redis-cli DEL 'client-config:meta'"
+        print_warning "  sudo systemctl restart drivershub-${VTC_ABBR}"
     fi
 }
 
@@ -1086,12 +1318,18 @@ main() {
     clone_repository
     setup_python_env
     fix_database_code
+    fix_client_config_plugin
     create_config_file
+    create_database_tables
     create_systemd_service
 
-    # Configurações opcionais
+    # Configurações opcionais (Nginx precisa estar pronto antes de corrigir api_host)
     configure_nginx
     configure_ssl
+
+    # Corrigir api_host no banco APÓS nginx estar configurado
+    # (dá mais tempo para o backend inicializar e o plugin criar a entrada)
+    fix_client_config_api_host
 
     # Salvar estado para o instalador do frontend
     save_installer_state

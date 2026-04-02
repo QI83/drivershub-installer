@@ -60,7 +60,7 @@ check_warning() {
 
 # Pedir sigla da VTC
 echo -e "${CYAN}Digite a abreviação/sigla da sua VTC (ex: cdmp):${NC}"
-read -p "> " VTC_ABBR
+read -r -p "> " VTC_ABBR
 
 if [ -z "$VTC_ABBR" ]; then
     echo -e "${RED}Sigla não pode ser vazia!${NC}"

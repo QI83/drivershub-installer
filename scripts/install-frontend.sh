@@ -268,67 +268,16 @@ deploy_nginx() {
     sudo chown -R www-data:www-data "$FRONTEND_WEBROOT"
     print_success "$(find "$FRONTEND_WEBROOT" -type f | wc -l) arquivos implantados em $FRONTEND_WEBROOT"
 
+    # Reescrever o config do Nginx completamente — mais confiável que regex replacement
+    # Garante que o bloco do frontend e da API estão sempre corretos
     local nginx_conf_path="/etc/nginx/sites-available/${BACKEND_NGINX_CONF}"
+    print_info "Escrevendo configuração Nginx completa: ${BACKEND_NGINX_CONF}"
 
-    if [[ -f "$nginx_conf_path" ]]; then
-        # O backend já criou o arquivo — substituímos o bloco placeholder
-        print_info "Atualizando configuração Nginx existente: ${BACKEND_NGINX_CONF}"
+    sudo tee "$nginx_conf_path" > /dev/null << EOF
+server {
+    listen 80;
+    server_name ${BACKEND_DOMAIN};
 
-        # Substituir o bloco location / placeholder pelo bloco real do SPA
-        sudo python3 - "$nginx_conf_path" "$FRONTEND_WEBROOT" << 'PYEOF'
-import sys, re
-
-conf_path = sys.argv[1]
-webroot   = sys.argv[2]
-
-with open(conf_path, 'r') as f:
-    content = f.read()
-
-# Bloco SPA que substituirá o placeholder
-spa_block = f"""    # ── Frontend (React SPA) ──────────────────────────────────────────────────
-    root {webroot};
-    index index.html;
-
-    location / {{
-        try_files $uri $uri/ /index.html;
-    }}
-
-    # Cache agressivo para assets com hash no nome
-    location ~* \\.(?:js|css|woff2?|ttf|eot|svg|png|jpg|ico|webp)$ {{
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }}"""
-
-# Substituir o bloco location / de placeholder (inclui linha do comentário FRONTEND_PLACEHOLDER)
-pattern = r'    # Placeholder:.*?# FRONTEND_PLACEHOLDER\n    location / \{[^}]+\}'
-replacement = spa_block
-
-new_content, n = re.subn(pattern, spa_block, content, flags=re.DOTALL)
-
-if n == 0:
-    # Fallback: substituir qualquer location / existente
-    pattern2 = r'    location / \{[^}]+\}'
-    new_content, n2 = re.subn(pattern2, spa_block, content, flags=re.DOTALL)
-    if n2 == 0:
-        print("WARN: não encontrei o bloco location / para substituir. Adicionando ao final do server block.")
-        new_content = content.rstrip().rstrip('}') + '\n\n' + spa_block + '\n}\n'
-
-with open(conf_path, 'w') as f:
-    f.write(new_content)
-
-print("OK")
-PYEOF
-
-    else
-        # Nginx não foi instalado pelo backend — criar config do zero
-        print_info "Criando configuração Nginx dedicada para o frontend..."
-
-        BACKEND_NGINX_CONF="drivershub-${BACKEND_VTC_ABBR}"
-        nginx_conf_path="/etc/nginx/sites-available/${BACKEND_NGINX_CONF}"
-
-        local api_block=""
-        if [[ -n "$BACKEND_PORT" ]]; then
-            api_block="
     # ── API do backend ────────────────────────────────────────────────────────
     location /${BACKEND_VTC_ABBR}/ {
         proxy_pass http://localhost:${BACKEND_PORT};
@@ -338,15 +287,8 @@ PYEOF
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \"upgrade\";
-    }"
-        fi
-
-        sudo tee "$nginx_conf_path" > /dev/null << EOF
-server {
-    listen 80;
-    server_name ${BACKEND_DOMAIN};
-    ${api_block}
+        proxy_set_header Connection "upgrade";
+    }
 
     # ── Frontend (React SPA) ──────────────────────────────────────────────────
     root ${FRONTEND_WEBROOT};
@@ -356,14 +298,16 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
-    location ~* \\.(?:js|css|woff2?|ttf|eot|svg|png|jpg|ico|webp)$ {
+    # Cache de assets estáticos com hash no nome (JS, CSS, imagens)
+    location ~* \.(?:js|css|woff2?|ttf|eot|svg|png|jpg|ico|webp)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
 }
 EOF
-        sudo ln -sf "$nginx_conf_path" "/etc/nginx/sites-enabled/${BACKEND_NGINX_CONF}"
-    fi
+
+    # Garantir que o site está habilitado
+    sudo ln -sf "$nginx_conf_path" "/etc/nginx/sites-enabled/${BACKEND_NGINX_CONF}"
 
     # Remover default se ainda existir
     sudo rm -f /etc/nginx/sites-enabled/default
@@ -378,6 +322,63 @@ EOF
         print_error "  sudo nginx -t"
         exit 1
     fi
+}
+
+################################################################################
+# Passo 4.5 — Garantir api_host correto no banco
+################################################################################
+
+fix_api_host() {
+    # Garante que o api_host no banco inclui o protocolo correto.
+    # Mesmo que install-drivershub.sh já tenha feito isso, verificamos novamente
+    # pois o install-frontend.sh pode ser rodado independentemente.
+
+    local protocol="${BACKEND_PROTOCOL:-http}"
+    local correct="${protocol}://${BACKEND_DOMAIN}"
+
+    print_info "Verificando api_host no banco de dados..."
+
+    # Verificar valor atual
+    local current
+    current=$(sudo mysql -N -s -e \
+        "SELECT JSON_UNQUOTE(JSON_EXTRACT(sval, '\$.api_host')) \
+         FROM \`${BACKEND_VTC_ABBR}_db\`.settings WHERE skey='client-config/meta';" \
+        2>/dev/null | tr -d '[:space:]' || echo "")
+
+    if [[ "$current" == "$correct" ]]; then
+        print_success "api_host já está correto: $correct"
+        return
+    fi
+
+    if [[ -z "$current" ]]; then
+        print_warning "Entrada client-config/meta não encontrada. Aguardando backend inicializar..."
+        sleep 5
+        current=$(sudo mysql -N -s -e \
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(sval, '\$.api_host')) \
+             FROM \`${BACKEND_VTC_ABBR}_db\`.settings WHERE skey='client-config/meta';" \
+            2>/dev/null | tr -d '[:space:]' || echo "")
+    fi
+
+    if [[ -z "$current" ]]; then
+        print_warning "Não foi possível verificar api_host. Tente reiniciar o backend:"
+        print_warning "  sudo systemctl restart drivershub-${BACKEND_VTC_ABBR}"
+        return
+    fi
+
+    print_info "Corrigindo api_host de '${current}' para '${correct}'..."
+    sudo mysql -e \
+        "UPDATE \`${BACKEND_VTC_ABBR}_db\`.settings \
+         SET sval = JSON_SET(sval, '\$.api_host', '${correct}') \
+         WHERE skey='client-config/meta';" 2>/dev/null || true
+
+    # Limpar Redis para próxima requisição buscar do banco atualizado
+    redis-cli DEL "client-config:meta" >/dev/null 2>&1 || true
+
+    # Reiniciar backend para garantir consistência
+    sudo systemctl restart "drivershub-${BACKEND_VTC_ABBR}.service" 2>/dev/null || true
+    sleep 3
+
+    print_success "api_host corrigido para: ${correct}"
 }
 
 ################################################################################
@@ -493,6 +494,7 @@ main() {
     configure_frontend
     clone_and_build
     deploy_nginx
+    fix_api_host
     verify_installation
     print_final_info
 }

@@ -222,12 +222,46 @@ update_backend() {
         print_success "config.json restaurado"
     fi
 
-    # Reaplicar patch do DATA DIRECTORY se necessário
-    if [[ ! -f "${BACKEND_INSTALL_DIR}/src/db.py.backup" ]]; then
-        print_info "Reaplicando correção DATA DIRECTORY..."
-        cp "${BACKEND_INSTALL_DIR}/src/db.py" "${BACKEND_INSTALL_DIR}/src/db.py.backup"
-        sed -i "s/ DATA DIRECTORY = '{app.config.db_data_directory}'//g" \
-            "${BACKEND_INSTALL_DIR}/src/db.py"
+    # Reaplicar patch DATA DIRECTORY se necessário (git pull reseta db.py)
+    if grep -q "DATA DIRECTORY = '" "${BACKEND_INSTALL_DIR}/src/db.py" 2>/dev/null; then
+        print_info "Reaplicando correção DATA DIRECTORY (git pull resetou db.py)..."
+        python3 - "${BACKEND_INSTALL_DIR}/src/db.py" << 'PYEOF'
+import sys
+fname = sys.argv[1]
+with open(fname, 'r') as f:
+    content = f.read()
+patched = content.replace(" DATA DIRECTORY = '{config.db_data_directory}'", "")
+patched = patched.replace(" DATA DIRECTORY = '{app.config.db_data_directory}'", "")
+with open(fname, 'w') as f:
+    f.write(patched)
+remaining = patched.count("DATA DIRECTORY = '")
+print(f"Patch DATA DIRECTORY aplicado. Restantes: {remaining}")
+PYEOF
+        print_success "Correção DATA DIRECTORY reaplicada"
+    else
+        print_info "Correção DATA DIRECTORY já está aplicada"
+    fi
+
+    # Reaplicar patch client-config.py (git pull reseta o arquivo)
+    local plugin_file="${BACKEND_INSTALL_DIR}/src/external_plugins/client-config.py"
+    local protocol="${BACKEND_PROTOCOL:-http}"
+    if [[ -f "$plugin_file" ]] && ! grep -qF "\"${protocol}://\" + config[\"domain\"]" "$plugin_file"; then
+        print_info "Reaplicando patch client-config.py..."
+        [[ -f "${plugin_file}.bak" ]] && cp "${plugin_file}.bak" "$plugin_file"
+        python3 - "$plugin_file" "$protocol" << 'PYEOF'
+import sys
+fname, protocol = sys.argv[1], sys.argv[2]
+with open(fname, 'r') as f:
+    content = f.read()
+patched = content.replace('"api_host": config["domain"]',
+                          f'"api_host": "{protocol}://" + config["domain"]')
+with open(fname, 'w') as f:
+    f.write(patched)
+print(f"Patch client-config.py aplicado ({protocol}://)")
+PYEOF
+        print_success "Patch client-config.py reaplicado"
+    else
+        print_info "Patch client-config.py já está correto"
     fi
 
     # Atualizar dependências Python
