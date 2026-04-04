@@ -1034,9 +1034,10 @@ Wants=mysql.service
 Type=simple
 User=$USER
 WorkingDirectory=$INSTALL_DIR/src
-Environment="PATH=$INSTALL_DIR/venv/bin"
+# PATH inclui venv (prioridade) + caminhos do sistema — necessário para ExecStartPre
+Environment="PATH=$INSTALL_DIR/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 # Aguardar MySQL (porta 3306) estar acessível — sem sudo, compatível com WSL
-# Usa checagem TCP via ss; loop limitado a 15 tentativas (30s); exit 0 para não bloquear
+# Loop limitado a 15 tentativas × 2s = 30s máx; exit 0 para nunca bloquear o start
 ExecStartPre=/bin/sh -c 'i=0; while [ \$i -lt 15 ]; do ss -lnt 2>/dev/null | grep -q ":3306" && exit 0; sleep 2; i=\$((i+1)); done; exit 0'
 ExecStart=$INSTALL_DIR/venv/bin/python3 main.py --config ../config.json
 Restart=on-failure
@@ -1066,12 +1067,14 @@ EOF
     fi
 
     print_info "Iniciando serviço..."
-    sudo systemctl start drivershub-${VTC_ABBR}.service
+    # Usar || true: em WSL o systemctl start pode retornar erro de job timeout mesmo
+    # quando o serviço sobe com sucesso — verificamos o estado real logo abaixo
+    sudo systemctl start drivershub-${VTC_ABBR}.service || true
 
-    # Aguardar o serviço inicializar — loop de até 30s para cobrir compilação inicial
+    # Aguardar o serviço inicializar — loop de até 40s para cobrir compilação Python inicial
     print_info "Aguardando inicialização (pode levar alguns segundos)..."
     local attempt=0
-    while [[ $attempt -lt 15 ]]; do
+    while [[ $attempt -lt 20 ]]; do
         sleep 2
         attempt=$((attempt + 1))
         if sudo systemctl is-active --quiet drivershub-${VTC_ABBR}.service; then
@@ -1081,7 +1084,7 @@ EOF
     done
 
     print_error "Falha ao iniciar serviço. Verificando logs..."
-    sudo journalctl -u drivershub-${VTC_ABBR}.service -n 20
+    sudo journalctl -u drivershub-${VTC_ABBR}.service -n 30 --no-pager
     exit 1
 }
 
