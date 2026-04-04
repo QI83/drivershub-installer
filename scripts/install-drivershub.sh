@@ -1304,20 +1304,24 @@ print_final_info() {
     echo -e "\n${CYAN}⚠️  PRÓXIMOS PASSOS IMPORTANTES${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    # Calcular a URL de callback exata
+    # O HubFrontend constrói o redirect_uri do Discord como:
+    #   https://{dhhost}/auth/discord/callback
+    # onde {dhhost} vem de window.location.host (sem protocolo, sem prefixo).
+    # O protocolo é SEMPRE https:// (hardcoded no frontend), e o path nunca
+    # inclui o prefixo da VTC (/cdmp/api/) — é uma rota React tratada pelo Nginx.
     local callback_url
-    if [[ "$INSTALL_SSL" == "y" ]]; then
-        callback_url="https://$DOMAIN/$VTC_ABBR/api/auth/discord/callback"
-    elif [[ "$INSTALL_NGINX" == "y" ]]; then
-        callback_url="http://$DOMAIN/$VTC_ABBR/api/auth/discord/callback"
+    if [[ "$DOMAIN" == "localhost" ]]; then
+        # localhost: dhhost = "localhost", protocolo hardcoded como https://
+        callback_url="https://localhost/auth/discord/callback"
     else
-        callback_url="http://localhost:$PORT/$VTC_ABBR/api/auth/discord/callback"
+        callback_url="https://${DOMAIN}/auth/discord/callback"
     fi
 
     echo "1. Configure o Redirect URI no Discord Developer Portal:"
     echo "   Portal: https://discord.com/developers/applications"
     echo "   → OAuth2 → Redirects → Adicionar exatamente:"
     echo -e "   ${GREEN}${callback_url}${NC}"
+    echo "   ⚠️  O frontend usa https:// e o path /auth/discord/callback (sem prefixo da VTC)"
     echo "   ⚠️  Sem este passo o login com Discord retorna 'redirect_uri inválido'"
     echo ""
     echo "2. Convide o bot Discord para seu servidor com permissões de admin"

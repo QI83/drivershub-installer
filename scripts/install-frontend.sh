@@ -468,7 +468,12 @@ print_final_info() {
     echo "1. Verifique se o domínio '$BACKEND_DOMAIN' aponta para este servidor"
     echo ""
     echo "2. Confirme o Redirect URI no Discord Developer Portal:"
-    echo "   ${base_url}/${BACKEND_VTC_ABBR}/api/auth/discord/callback"
+    echo "   O HubFrontend usa https:// + domínio + /auth/discord/callback (sem prefixo da VTC)"
+    if [[ "$BACKEND_DOMAIN" == "localhost" ]]; then
+        echo -e "   ${GREEN}https://localhost/auth/discord/callback${NC}"
+    else
+        echo -e "   ${GREEN}https://${BACKEND_DOMAIN}/auth/discord/callback${NC}"
+    fi
     echo ""
     echo "3. Acesse ${base_url}/ e faça login com Discord"
     echo ""
