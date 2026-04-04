@@ -2,7 +2,7 @@
 
 ################################################################################
 # Script de Instalação Automatizada do Drivers Hub
-# Versão: 1.2.0
+# Versão: 1.2.1
 # Data: Março 2026
 #
 # Este script automatiza a instalação completa do Drivers Hub Backend
@@ -51,7 +51,7 @@ print_header() {
     echo "║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║"
     echo "║              Euro Truck Simulator 2 / ATS                     ║"
     echo "║                                                               ║"
-    echo "║ Versão: 1.2.0                                                 ║"
+    echo "║ Versão: 1.2.1                                                 ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -83,10 +83,10 @@ confirm() {
     local response
     
     if [[ "$default" == "y" ]]; then
-        read -p "$(echo -e ${YELLOW}$prompt [S/n]: ${NC})" response
+        read -r -p "$(echo -e "${YELLOW}${prompt} [S/n]: ${NC}")" response
         response=${response:-y}
     else
-        read -p "$(echo -e ${YELLOW}$prompt [s/N]: ${NC})" response
+        read -r -p "$(echo -e "${YELLOW}${prompt} [s/N]: ${NC}")" response
         response=${response:-n}
     fi
     
@@ -574,6 +574,26 @@ install_mysql() {
     sudo mysql -e "GRANT ALL PRIVILEGES ON ${VTC_ABBR}_db.* TO '${VTC_ABBR}_user'@'localhost';" 2>/dev/null || true
     sudo mysql -e "FLUSH PRIVILEGES;" 2>/dev/null || true
 
+    # Configurar timeouts do MySQL para evitar "Lost connection" e "Timeout" no pool
+    # O backend mantém conexões abertas — sem isso elas expiram em 8h (padrão)
+    # e o próximo acesso falha com OperationalError
+    print_info "Configurando timeouts do MySQL..."
+    local mysql_conf="/etc/mysql/mysql.conf.d/drivershub.cnf"
+    sudo tee "$mysql_conf" > /dev/null << 'MYSQLEOF'
+# Configuração gerada pelo instalador do Drivers Hub
+[mysqld]
+# Manter conexões abertas por até 12h (43200s) — evita "Lost connection" no pool
+wait_timeout            = 43200
+interactive_timeout     = 43200
+# Permitir reconexão automática do pool
+connect_timeout         = 10
+# Tamanho máximo de pacote (para dados de entrega grandes)
+max_allowed_packet      = 64M
+MYSQLEOF
+
+    sudo systemctl restart mysql
+    print_success "MySQL configurado com timeouts otimizados"
+
     # Verificar se o banco foi criado com sucesso
     if sudo mysql -e "USE ${VTC_ABBR}_db;" 2>/dev/null; then
         print_success "Banco de dados MySQL configurado"
@@ -847,8 +867,12 @@ create_config_file() {
     # Gerar secret key aleatória
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 
+    # Protocolo correto baseado em SSL — evita redirect_uri inválido no Discord OAuth
+    local proto="http"
+    [[ "$INSTALL_SSL" == "y" ]] && proto="https"
+
     print_info "Gerando config.json..."
-    
+
     cat > config.json << EOF
 {
     "abbr": "$VTC_ABBR",
@@ -858,15 +882,15 @@ create_config_file() {
     "privacy": false,
     "security_level": 1,
     "hex_color": "FFFFFF",
-    "logo_url": "https://$DOMAIN/images/logo.png",
+    "logo_url": "${proto}://$DOMAIN/images/logo.png",
     "banner_background_url": "",
     "banner_background_opacity": 0.15,
     "banner_info_first_row": "rank",
     "openapi": true,
     "frontend_urls": {
-        "member": "https://$DOMAIN/$VTC_ABBR/member/{userid}",
-        "delivery": "https://$DOMAIN/$VTC_ABBR/delivery/{logid}",
-        "email_confirm": "https://$DOMAIN/$VTC_ABBR/auth/email?secret={secret}"
+        "member": "${proto}://$DOMAIN/$VTC_ABBR/member/{userid}",
+        "delivery": "${proto}://$DOMAIN/$VTC_ABBR/delivery/{logid}",
+        "email_confirm": "${proto}://$DOMAIN/$VTC_ABBR/auth/email?secret={secret}"
     },
     "domain": "$DOMAIN",
     "prefix": "/$VTC_ABBR",
@@ -882,8 +906,8 @@ create_config_file() {
     "db_password": "$DB_PASSWORD",
     "db_name": "${VTC_ABBR}_db",
     "db_data_directory": "",
-    "db_pool_size": 10,
-    "db_error_keywords": ["lost connection", "deadlock", "readexactly", "timeout", "[aiosql]"],
+    "db_pool_size": 5,
+    "db_error_keywords": ["lost connection", "deadlock", "readexactly", "timeout", "[aiosql]", "server has gone away"],
     "captcha": {
         "provider": "hcaptcha",
         "secret": ""
@@ -1003,15 +1027,21 @@ create_systemd_service() {
 [Unit]
 Description=$VTC_NAME - Drivers Hub Backend
 After=network.target mysql.service redis.service
+Requires=mysql.service
 
 [Service]
 Type=simple
 User=$USER
 WorkingDirectory=$INSTALL_DIR/src
 Environment="PATH=$INSTALL_DIR/venv/bin"
+# Aguardar MySQL aceitar conexões antes de iniciar (evita "Lost connection" no startup)
+ExecStartPre=/bin/sh -c 'until sudo mysql -e "SELECT 1;" >/dev/null 2>&1; do echo "Aguardando MySQL..."; sleep 2; done'
 ExecStart=$INSTALL_DIR/venv/bin/python3 main.py --config ../config.json
-Restart=always
+Restart=on-failure
 RestartSec=10
+# Tentar até 5 vezes antes de desistir
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target
@@ -1266,14 +1296,22 @@ print_final_info() {
 
     echo -e "\n${CYAN}⚠️  PRÓXIMOS PASSOS IMPORTANTES${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "1. Configure o Redirect URI no Discord Developer Portal:"
+
+    # Calcular a URL de callback exata
+    local callback_url
     if [[ "$INSTALL_SSL" == "y" ]]; then
-        echo "   https://$DOMAIN/$VTC_ABBR/api/auth/discord/callback"
+        callback_url="https://$DOMAIN/$VTC_ABBR/api/auth/discord/callback"
     elif [[ "$INSTALL_NGINX" == "y" ]]; then
-        echo "   http://$DOMAIN/$VTC_ABBR/api/auth/discord/callback"
+        callback_url="http://$DOMAIN/$VTC_ABBR/api/auth/discord/callback"
     else
-        echo "   http://localhost:$PORT/$VTC_ABBR/api/auth/discord/callback"
+        callback_url="http://localhost:$PORT/$VTC_ABBR/api/auth/discord/callback"
     fi
+
+    echo "1. Configure o Redirect URI no Discord Developer Portal:"
+    echo "   Portal: https://discord.com/developers/applications"
+    echo "   → OAuth2 → Redirects → Adicionar exatamente:"
+    echo -e "   ${GREEN}${callback_url}${NC}"
+    echo "   ⚠️  Sem este passo o login com Discord retorna 'redirect_uri inválido'"
     echo ""
     echo "2. Convide o bot Discord para seu servidor com permissões de admin"
     echo ""

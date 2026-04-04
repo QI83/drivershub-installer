@@ -91,7 +91,7 @@ check_item "MySQL instalado" "command -v mysql"
 check_item "MySQL rodando" "systemctl is-active mysql"
 
 if systemctl is-active mysql &>/dev/null; then
-    DB_PASS=$(grep db_password /opt/drivershub/HubBackend/config.json 2>/dev/null | cut -d'"' -f4)
+    DB_PASS=$(python3 -c "import json; d=json.load(open('/opt/drivershub/HubBackend/config.json')); print(d.get('db_password',''))" 2>/dev/null || echo "")
     if mysql -u "${VTC_ABBR}_user" -p"${DB_PASS}" -e "USE ${VTC_ABBR}_db;" 2>/dev/null; then
         echo -e "Banco de dados: ${GREEN}✅ Acessível${NC}"
     else
@@ -153,7 +153,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # Ler porta do config
 if [ -f /opt/drivershub/HubBackend/config.json ]; then
-    PORT=$(grep server_port /opt/drivershub/HubBackend/config.json | cut -d':' -f2 | tr -d ' ,')
+    PORT=$(python3 -c "import json; d=json.load(open('/opt/drivershub/HubBackend/config.json')); print(d.get('server_port', 7777))" 2>/dev/null || echo "7777")
     echo "Porta configurada: $PORT"
     
     if check_item "Porta $PORT escutando" "ss -tuln | grep -q :$PORT"; then

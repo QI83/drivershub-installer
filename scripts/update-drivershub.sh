@@ -269,7 +269,10 @@ PYEOF
     # shellcheck source=/dev/null
     source "${BACKEND_INSTALL_DIR}/venv/bin/activate"
     pip install --upgrade pip -q
-    pip install -r "${BACKEND_INSTALL_DIR}/requirements.txt" -q
+    # Filtrar pacotes dev (nuitka, ruff) igual à instalação inicial
+    grep -v '# dev' "${BACKEND_INSTALL_DIR}/requirements.txt" > /tmp/requirements_prod_update.txt
+    pip install -r /tmp/requirements_prod_update.txt -q
+    rm -f /tmp/requirements_prod_update.txt
     pip install cryptography -q  # garante compatibilidade com MySQL 8+
     deactivate
 
