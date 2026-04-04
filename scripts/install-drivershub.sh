@@ -1027,20 +1027,24 @@ create_systemd_service() {
 [Unit]
 Description=$VTC_NAME - Drivers Hub Backend
 After=network.target mysql.service redis.service
-Requires=mysql.service
+# Wants (suave) em vez de Requires — compatível com WSL onde mysql pode não ser unit systemd
+Wants=mysql.service
 
 [Service]
 Type=simple
 User=$USER
 WorkingDirectory=$INSTALL_DIR/src
 Environment="PATH=$INSTALL_DIR/venv/bin"
-# Aguardar MySQL aceitar conexões antes de iniciar (evita "Lost connection" no startup)
-ExecStartPre=/bin/sh -c 'until sudo mysql -e "SELECT 1;" >/dev/null 2>&1; do echo "Aguardando MySQL..."; sleep 2; done'
+# Aguardar MySQL (porta 3306) estar acessível — sem sudo, compatível com WSL
+# Usa checagem TCP via ss; loop limitado a 15 tentativas (30s); exit 0 para não bloquear
+ExecStartPre=/bin/sh -c 'i=0; while [ \$i -lt 15 ]; do ss -lnt 2>/dev/null | grep -q ":3306" && exit 0; sleep 2; i=\$((i+1)); done; exit 0'
 ExecStart=$INSTALL_DIR/venv/bin/python3 main.py --config ../config.json
 Restart=on-failure
 RestartSec=10
+# Tempo máximo para o serviço inicializar (cobre compilação Python inicial)
+TimeoutStartSec=90
 # Tentar até 5 vezes antes de desistir
-StartLimitIntervalSec=60
+StartLimitIntervalSec=120
 StartLimitBurst=5
 
 [Install]
