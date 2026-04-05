@@ -1,6 +1,6 @@
 # 🚚 Drivers Hub — Instalador Automático
 
-[![Versão](https://img.shields.io/badge/versão-1.2.1-blue.svg)](https://github.com/QI83/drivershub-installer/releases)
+[![Versão](https://img.shields.io/badge/versão-1.3.0-blue.svg)](https://github.com/QI83/drivershub-installer/releases)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04+-orange.svg)](https://ubuntu.com/)
 [![Bash](https://img.shields.io/badge/Bash-5.0+-lightgrey.svg)](https://www.gnu.org/software/bash/)
 [![ShellCheck](https://img.shields.io/badge/ShellCheck-passing-brightgreen.svg)](https://www.shellcheck.net/)
@@ -9,7 +9,7 @@
 
 > **Instalação automatizada completa do Drivers Hub — Backend + Frontend — para transportadoras virtuais de Euro Truck Simulator 2 e American Truck Simulator.**
 
-[🚀 Início Rápido](#-início-rápido) • [✨ O Que Instala](#-o-que-instala) • [🛠️ Scripts](#️-scripts-disponíveis) • [📖 Documentação](#-documentação) • [🆘 Suporte](#-suporte)
+[🚀 Início Rápido](#-início-rápido) • [🌐 Cenários](#-cenários-de-implantação) • [✨ O Que Instala](#-o-que-instala) • [🛠️ Scripts](#️-scripts-disponíveis) • [📖 Documentação](#-documentação) • [🆘 Suporte](#-suporte)
 
 ---
 
@@ -19,22 +19,39 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║          INSTALADOR AUTOMÁTICO - DRIVERS HUB                  ║
 ║              Euro Truck Simulator 2 / ATS                     ║
-║ Versão: 1.2.0                                                 ║
+║ Versão: 1.3.0                                                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-⚠️  INSTALAÇÃO EXISTENTE DETECTADA!
+╔═══════════════════════════════════════════════════════════════╗
+║  CENÁRIO 1 — VPS/Cloud + Domínio Próprio + SSL               ║
+╠═══════════════════════════════════════════════════════════════╣
+║  ✅ Servidor VPS (DigitalOcean, Vultr, Contabo, AWS…)         ║
+║  ✅ Domínio já registrado (ex: minha-vtc.com.br)              ║
+║  ✅ SSL/HTTPS automático via Let's Encrypt                    ║
+╚═══════════════════════════════════════════════════════════════╝
 
-  VTC:          CDMP Express (cdmp)
-  Backend:      /opt/drivershub/HubBackend
-  Instalado em: 2026-03-15T14:32:00Z
-  Serviço:      ✅ Rodando
+╔═══════════════════════════════════════════════════════════════╗
+║  CENÁRIO 2 — VPS/Cloud + DuckDNS (domínio gratuito) + SSL    ║
+╚═══════════════════════════════════════════════════════════════╝
 
-O que deseja fazer?
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  1) Reparar instalação   — corrige dependências sem apagar dados
-  2) Nova instalação      — APAGA tudo e instala do zero
-  3) Cancelar
+╔═══════════════════════════════════════════════════════════════╗
+║  CENÁRIO 3 — Servidor Local + Cloudflare Tunnel               ║
+╚═══════════════════════════════════════════════════════════════╝
 ```
+
+---
+
+## 🌐 Cenários de Implantação
+
+O instalador oferece **3 cenários 100% gratuitos e automatizados**. Escolha o que melhor se encaixa na sua situação:
+
+| # | Cenário | Para quem é? | SSL |
+|---|---------|-------------|-----|
+| **1** | **VPS + Domínio próprio** | Tem servidor VPS e domínio registrado | Let's Encrypt automático |
+| **2** | **VPS + DuckDNS** | Tem VPS mas sem domínio — cria grátis em duckdns.org | Let's Encrypt automático |
+| **3** | **Local + Cloudflare Tunnel** | Computador em casa, sem IP fixo, sem abrir portas | Cloudflare (automático) |
+
+> 💡 O **Cenário 3** substitui completamente a antiga opção "localhost" — resolve o problema de SSL exigido pelo Discord OAuth.
 
 ---
 
@@ -45,13 +62,17 @@ O que deseja fazer?
 | Componente | Descrição |
 |---|---|
 | **Python 3 + venv** | Ambiente virtual isolado com todas as dependências |
-| **MySQL Server** | Banco de dados com usuário e schema configurados |
+| **MySQL Server** | Banco de dados com usuário e schema por VTC |
 | **Redis** | Cache e gerenciamento de sessões |
-| **HubBackend** | Clone e configuração do repositório oficial |
+| **HubBackend** | Clone em `/opt/drivershub/{sigla}/HubBackend` por VTC |
 | **config.json** | Arquivo de configuração personalizado completo |
-| **Systemd Service** | Serviço com restart automático em caso de falha |
-| **Nginx** | Proxy reverso com roteamento separado API / frontend *(opcional)* |
-| **SSL/HTTPS** | Certificado Let's Encrypt via Certbot *(opcional)* |
+| **Systemd Service** | Serviço `drivershub-{sigla}` com restart automático |
+| **Nginx** | Proxy reverso com roteamento separado API / frontend |
+| **SSL/HTTPS** | Let's Encrypt via Certbot (Cenários 1 e 2) |
+| **DuckDNS** | Subdomínio gratuito com atualização de IP automática (Cenário 2) |
+| **Cloudflare Tunnel** | Exposição HTTPS via `cloudflared` (Cenário 3) |
+| **Firewall (ufw)** | Regras para portas 80, 443 e API configuradas automaticamente |
+| **Backup automático** | Cron diário às 3h — retenção de 7 dias |
 
 ### 🎨 Etapa 2 — Frontend (`install-frontend.sh`)
 
@@ -74,14 +95,18 @@ O que deseja fazer?
 |---|---|
 | Sistema | Ubuntu 20.04+ ou Debian 11+ |
 | CPU | 2 cores |
-| RAM | 2 GB |
-| Disco | 10 GB livres |
+| RAM | 1.5 GB (verificado automaticamente) |
+| Disco | 5 GB livres (verificado automaticamente) |
 | Acesso | Usuário normal com `sudo` — **NÃO root!** |
+
+> O instalador verifica RAM, disco, acesso à internet e disponibilidade das portas 80/443 **antes de instalar**.
 
 Antes de começar, tenha em mãos:
 - 🎮 **Discord**: Client ID, Client Secret, Bot Token, Server ID → [discord.com/developers/applications](https://discord.com/developers/applications)
 - 🎮 **Steam API Key** → [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)
-- 📋 **Dados da VTC**: nome, sigla (ex: `cdmp`), domínio
+- 📋 **Dados da VTC**: nome, sigla (ex: `cdmp`)
+- 🌐 **Cenário 2**: conta no [duckdns.org](https://www.duckdns.org) com subdomínio criado
+- ☁️ **Cenário 3**: conta no [Cloudflare](https://one.dash.cloudflare.com) com tunnel criado
 
 ### Instalação passo a passo
 
@@ -90,7 +115,7 @@ Antes de começar, tenha em mãos:
 git clone https://github.com/QI83/drivershub-installer.git
 cd drivershub-installer
 
-# 2. Instalar o Backend (Python, MySQL, Redis, serviço)
+# 2. Instalar o Backend (Python, MySQL, Redis, serviço, firewall, backup)
 bash scripts/install-drivershub.sh
 
 # 3. Instalar o Frontend (Node.js, build React, Nginx)
@@ -100,7 +125,7 @@ bash scripts/install-frontend.sh
 bash scripts/verificar-instalacao.sh
 ```
 
-> ⏱️ Tempo total estimado: **10–25 minutos**
+> ⏱️ Tempo total estimado: **15–30 minutos**
 
 ---
 
@@ -108,11 +133,43 @@ bash scripts/verificar-instalacao.sh
 
 | Script | Finalidade |
 |---|---|
-| `install-drivershub.sh` | **Instalar** o Backend |
+| `install-drivershub.sh` | **Instalar** o Backend (detecta VTCs existentes, multi-VTC) |
 | `install-frontend.sh` | **Instalar** o Frontend |
+| `reconfigure-drivershub.sh` | **Reconfigurar** domínio, credenciais, porta, SSL ou Tunnel |
 | `update-drivershub.sh` | **Atualizar** Backend e/ou Frontend |
+| `backup-drivershub.sh` | **Backup** manual/automático do banco de dados |
+| `health-check.sh` | **Monitorar** serviços com notificação Discord |
+| `verificar-instalacao.sh` | **Verificar** todos os componentes da instalação |
 | `uninstall-drivershub.sh` | **Desinstalar** completamente |
-| `verificar-instalacao.sh` | **Verificar** todos os componentes |
+
+### Reconfigurar após a instalação
+
+Para alterar domínio, credenciais Discord/Steam, porta, SSL ou Cloudflare Tunnel sem reinstalar:
+
+```bash
+bash scripts/reconfigure-drivershub.sh
+```
+
+### Backup do banco de dados
+
+```bash
+# Menu interativo (criar backup, listar, restaurar, configurar cron)
+bash scripts/backup-drivershub.sh
+
+# Backup automático já configurado pelo instalador:
+# /opt/drivershub/backup-{sigla}.sh → cron diário às 3h
+# Backups em: /opt/drivershub/backups/{sigla}/
+```
+
+### Health Check com notificação Discord
+
+```bash
+# Configurar webhook e frequência de monitoramento
+bash scripts/health-check.sh
+
+# Verificação manual imediata
+bash scripts/health-check.sh --run {sigla}
+```
 
 ### Atualizar
 
@@ -120,26 +177,18 @@ bash scripts/verificar-instalacao.sh
 bash scripts/update-drivershub.sh
 ```
 
-Faz backup automático do `config.json` antes de qualquer alteração, executa `git pull` nos repositórios e reinstala dependências. Você escolhe o que atualizar.
-
 ### Desinstalar
 
 ```bash
 bash scripts/uninstall-drivershub.sh
 ```
 
-Remove cada componente (serviço, Nginx, banco, arquivos) com confirmação individual. O banco de dados exige confirmação extra por ser irreversível.
-
 ### Modo reparo
-
-Se algo quebrar, rode novamente o instalador do backend:
 
 ```bash
 bash scripts/install-drivershub.sh
-# → Selecione: 1) Reparar instalação
+# → Selecione: r) Reparar instalação
 ```
-
-O modo reparo corrige dependências, reinicia serviços e reaplicar patches sem tocar no `config.json` nem nos dados.
 
 ---
 
@@ -147,7 +196,7 @@ O modo reparo corrige dependências, reinicia serviços e reaplicar patches sem 
 
 | Documento | Descrição |
 |---|---|
-| 📖 [GUIA_INSTALACAO.md](docs/GUIA_INSTALACAO.md) | Guia detalhado passo a passo com exemplos |
+| 📖 [GUIA_INSTALACAO.md](docs/GUIA_INSTALACAO.md) | Guia detalhado passo a passo com os 3 cenários |
 | 🔧 [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Soluções rápidas para os problemas mais comuns |
 | 📋 [README.txt](README.txt) | Referência rápida em texto puro |
 | 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) | Como contribuir com o projeto |
@@ -158,11 +207,13 @@ O modo reparo corrige dependências, reinicia serviços e reaplicar patches sem 
 
 ### 1. Discord Redirect URI
 
-No [Discord Developer Portal](https://discord.com/developers/applications) → **OAuth2 → Redirects**:
+No [Discord Developer Portal](https://discord.com/developers/applications) → **OAuth2 → Redirects**, adicione **exatamente**:
 
 ```
-https://seudominio.com/[SIGLA]/api/auth/discord/callback
+https://seudominio.com/auth/discord/callback
 ```
+
+> ⚠️ O frontend usa `https://` fixo e o path `/auth/discord/callback` — **sem o prefixo da VTC e sem `/api/`**. Registrar a URL errada resulta em "redirect_uri inválido".
 
 ### 2. Convidar o Bot
 
@@ -170,91 +221,126 @@ https://seudominio.com/[SIGLA]/api/auth/discord/callback
 
 ### 3. Acessar
 
-| Configuração | URL |
+| Cenário | URL |
 |---|---|
-| Com domínio + SSL | `https://seudominio.com/` |
-| Com domínio sem SSL | `http://seudominio.com/` |
-| Sem Nginx | `http://localhost:7777/[sigla]` |
+| Cenário 1 ou 2 (SSL) | `https://seudominio.com/` |
+| Cenário 3 (Cloudflare Tunnel) | `https://seu-hostname.cloudflare.com/` |
 
 ---
 
 ## 📋 Comandos Úteis
 
 ```bash
-# Backend — gerenciamento do serviço
+# Serviço — substitua [SIGLA] pela sua abreviação (ex: cdmp)
 sudo systemctl status  drivershub-[SIGLA]
 sudo journalctl -u     drivershub-[SIGLA] -f
 sudo systemctl restart drivershub-[SIGLA]
 
-# Banco de dados
-mysql -u [SIGLA]_user -p [SIGLA]_db
-mysqldump -u [SIGLA]_user -p [SIGLA]_db > backup_$(date +%Y%m%d).sql
+# Reconfigurar
+bash scripts/reconfigure-drivershub.sh
 
-# Nginx
-sudo nginx -t && sudo systemctl reload nginx
-sudo tail -f /var/log/nginx/error.log
+# Backup imediato
+bash /opt/drivershub/backup-[SIGLA].sh
+
+# Ver backups
+ls -lh /opt/drivershub/backups/[SIGLA]/
+
+# Verificar instalação completa
+bash scripts/verificar-instalacao.sh
 ```
 
 ---
 
 ## 🏗️ Arquitetura
 
+### Cenários 1 e 2 (VPS)
+
 ```
-                     Internet
-                         │
-                    [Nginx :80/443]
-                    /             \
-           location /          location /[sigla]/
-                │                      │
-   ┌────────────┴───────────┐  ┌───────┴────────────┐
-   │  Frontend (estático)   │  │  Backend (FastAPI)  │
-   │  /var/www/dh-frontend  │  │  localhost:7777     │
-   │  React SPA + Vite      │  │  Python + venv      │
-   └────────────────────────┘  └─────────┬───────────┘
-                                         │
-                              ┌──────────┴──────────┐
-                              │                     │
-                           [MySQL]              [Redis]
-                       banco de dados         cache / sessão
+          Internet
+              │
+        [Nginx :80/443]
+         /           \
+location /         location /[sigla]/
+    │                      │
+┌───┴──────────────┐  ┌────┴───────────────┐
+│ Frontend (React) │  │  Backend (FastAPI)  │
+│ /var/www/dh-fe/  │  │  localhost:{porta}  │
+└──────────────────┘  └──────────┬──────────┘
+                                 │
+                      ┌──────────┴──────────┐
+                      │                     │
+                   [MySQL]              [Redis]
+              /opt/drivershub/        sessões
+              {sigla}/HubBackend/
+```
+
+### Cenário 3 (Local + Cloudflare Tunnel)
+
+```
+  Internet → [Cloudflare Edge] → [cloudflared] → [Nginx :80] → Backend/Frontend
+  (HTTPS automático)             (daemon local)   (sem SSL local)
+```
+
+### Multi-VTC no mesmo servidor
+
+```
+/opt/drivershub/
+├── vtc1/HubBackend/       ← VTC 1 isolada
+├── vtc2/HubBackend/       ← VTC 2 isolada
+├── .installer_state_vtc1  ← estado da VTC 1
+├── .installer_state_vtc2  ← estado da VTC 2
+├── backups/vtc1/          ← backups da VTC 1
+├── backups/vtc2/          ← backups da VTC 2
+└── backup-vtc1.sh         ← script de backup VTC 1
 ```
 
 ---
 
 ## 📝 Changelog
 
+### [1.3.0] — Abril 2026
+
+- ✨ **3 cenários de implantação** com menu visual explicativo
+- ✨ **DuckDNS** (Cenário 2): subdomínio gratuito com atualização automática de IP a cada 5 min
+- ✨ **Cloudflare Tunnel** (Cenário 3): substitui a opção localhost — resolve SSL exigido pelo Discord
+- ✨ **Multi-VTC**: cada VTC usa `/opt/drivershub/{sigla}/HubBackend` e state file separado
+- ✨ **`reconfigure-drivershub.sh`**: alterar domínio, credenciais, porta, SSL ou Tunnel após instalação
+- ✨ **`backup-drivershub.sh`**: backup/restauração interativo com cron configurável
+- ✨ **`health-check.sh`**: monitoramento com reinício automático e notificação via Discord webhook
+- ✨ **`verificar-instalacao.sh` v2.0**: 10 seções, auto-detecta VTCs, verifica api_host, DuckDNS, Cloudflare Tunnel
+- ✨ **Firewall automático**: ufw configurado para portas 80, 443 e API durante a instalação
+- ✨ **Verificação de recursos**: RAM, disco, internet e portas 80/443 antes de instalar
+- 🐛 **Discord Client ID/Secret**: troca endpoint `@me` pelo `oauth2/token` — corrige falsos negativos
+- 🐛 **api_host**: patch client-config.py agora aplica `https://` para Cenários 2 e 3 também
+
 ### [1.2.1] — Março 2026
-- 🐛 **Bug crítico**: `"external_plugins": []` no `config.json` gerado causava tela "inoperância temporária" — corrigido para `["client-config"]`
-- 🐛 **Bug crítico**: `python3 -m venv` travava aguardando input no Passo 7 — corrigido com `< /dev/null`
-- 🐛 MySQL 8+: `default_authentication_plugin` definido globalmente para cobrir conexões diretas via `pymysql`
-- ✨ Validação de credenciais agora **revalida** após o usuário corrigir token ou API Key
-- ✨ Pergunta sobre Frontend adicionada ao fluxo do instalador — Nginx é configurado automaticamente se frontend for selecionado
-- ✨ `"db_port": 3306` adicionado ao `config.json` (campo exigido na versão atual do HubBackend)
+- 🐛 `confirm()` sem `-r` causava interpretação de backslash em senhas
+- 🐛 Parsing frágil do config.json com grep/cut substituído por `python3 -c json.load`
+- 🐛 systemd no WSL: PATH insuficiente causava `grep: not found` no ExecStartPre
+- 🐛 Discord OAuth: URL de callback exibida incorretamente nas instruções finais
 
 ### [1.2.0] — Março 2026
-- ✨ `update-drivershub.sh` — atualiza Backend e/ou Frontend com backup automático
-- ✨ `uninstall-drivershub.sh` — desinstalação completa com confirmação por etapa
-- ✨ Detecção de instalação existente com menu de reparo / reinstalar / cancelar
-- ✨ Modo reparo preserva `config.json` e recarrega dados automaticamente
-- ✨ Validação de credenciais Discord e Steam antes de instalar
+- ✨ `update-drivershub.sh` com backup automático antes de pull
+- ✨ `uninstall-drivershub.sh` com confirmação por etapa
+- ✨ Detecção de instalação existente com modo reparo/reinstalar
 
 ### [1.1.0] — Março 2026
 - ✨ `install-frontend.sh` — instalador completo do HubFrontend
-- ✨ State file `/opt/drivershub/.installer_state` para comunicação entre scripts
-- ✨ Nginx separado: `/[sigla]/` → API, `/` → frontend
-- 🐛 Bug crítico: `set -o pipefail` + `grep -v` causava abort silencioso
-- 🐛 Bug crítico: `{domain}` literal no `config.json`
+- ✨ State file para comunicação entre scripts
 - 🔄 MariaDB substituído por MySQL
 
 ### [1.0.0] — Fevereiro 2026
-- ✨ Script de instalação automatizado do Backend
-- ✨ Documentação completa e script de verificação
+- ✨ Script inicial de instalação automatizada do Backend
 
 ---
 
 ## 🔒 Segurança
 
-Use senhas fortes, configure firewall (`ufw allow 80,443/tcp`), SSL em produção e backups regulares.
-Vulnerabilidades: **não abra issue pública** — envie e-mail para **kiq.reis09@gmail.com**
+- **Firewall**: configurado automaticamente pelo instalador (HTTP, HTTPS, porta da API)
+- **SSL**: automático via Let's Encrypt (Cenários 1 e 2) ou Cloudflare (Cenário 3)
+- **Backups**: cron diário configurado automaticamente — backups em `/opt/drivershub/backups/`
+- **config.json**: permissões `600` (somente o dono lê)
+- Vulnerabilidades: **não abra issue pública** — envie para **kiq.reis09@gmail.com**
 
 ---
 

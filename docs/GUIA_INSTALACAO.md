@@ -4,10 +4,15 @@
 
 - [Sobre](#-sobre)
 - [Requisitos](#-requisitos)
+- [Cenários de Implantação](#-cenários-de-implantação)
 - [Preparação](#-preparação)
 - [Passo 1 — Backend](#-passo-1--backend)
-- [Passo 2 — Frontend](#-passo-3--frontend)
+- [Passo 2 — Frontend](#-passo-2--frontend)
 - [Pós-Instalação](#-pós-instalação)
+- [Reconfigurar após instalação](#-reconfigurar-após-instalação)
+- [Multi-VTC no mesmo servidor](#-multi-vtc-no-mesmo-servidor)
+- [Backup automático](#-backup-automático)
+- [Health Check](#-health-check)
 - [Atualizar](#-atualizando)
 - [Desinstalar](#-desinstalando)
 - [Modo Reparo](#-modo-reparo)
@@ -21,16 +26,22 @@
 
 Este projeto automatiza completamente a instalação do **Drivers Hub** — Backend e Frontend — para transportadoras virtuais de Euro Truck Simulator 2 e American Truck Simulator.
 
+O instalador oferece **3 cenários 100% gratuitos**, cuida do domínio, SSL, firewall e backup automaticamente — sem necessidade de configuração manual.
+
 ### O que é instalado automaticamente
 
 **Backend:**
 - Python 3 com ambiente virtual e dependências
-- MySQL com banco de dados e usuário configurados
+- MySQL com banco de dados e usuário configurados por VTC
 - Redis para cache e sessões
-- HubBackend clonado e configurado
-- Serviço systemd com restart automático
-- Nginx como proxy reverso *(opcional)*
-- SSL/HTTPS com Let's Encrypt *(opcional)*
+- HubBackend clonado em `/opt/drivershub/{sigla}/HubBackend`
+- Serviço systemd `drivershub-{sigla}` com restart automático
+- Nginx como proxy reverso
+- SSL/HTTPS com Let's Encrypt (Cenários 1 e 2)
+- DuckDNS com atualização automática de IP (Cenário 2)
+- Cloudflare Tunnel via `cloudflared` (Cenário 3)
+- Firewall ufw configurado automaticamente
+- Backup automático do banco (cron diário às 3h)
 
 **Frontend:**
 - Node.js 20+ via NodeSource
@@ -47,17 +58,20 @@ Este projeto automatiza completamente a instalação do **Drivers Hub** — Back
 - **Debian 11+**
 
 ### Hardware
+
+> O instalador verifica automaticamente os recursos antes de prosseguir.
+
 - **CPU**: 2 cores mínimo
-- **RAM**: 2 GB mínimo
-- **Disco**: 10 GB livres
-- **Rede**: Conexão estável com internet
+- **RAM**: 1.5 GB mínimo (aviso abaixo de 900 MB)
+- **Disco**: 5 GB livres mínimo
+- **Rede**: Conexão estável com internet (verificada automaticamente)
+- **Portas**: 80 e 443 disponíveis (verificadas automaticamente)
 
 ### Acesso
 > ⚠️ **NÃO execute como root!** Use um usuário normal com `sudo`.
 
 ```bash
-# Verificar seu usuário atual
-whoami
+whoami          # Deve mostrar um nome, não "root"
 
 # Se estiver como root, crie um usuário:
 adduser seuusuario
@@ -78,17 +92,77 @@ su - seuusuario
 
 **Steam** — [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)
 
-| Campo | Onde encontrar |
-|---|---|
-| API Key | Preencha o domínio e clique em "Register" |
-
 **Dados da VTC**
 
 | Campo | Exemplo |
 |---|---|
 | Nome completo | CDMP Express |
 | Abreviação (sigla) | cdmp |
-| Domínio | hub.minhaVTC.com *(deixe vazio para localhost)* |
+
+---
+
+## 🌐 Cenários de Implantação
+
+O instalador apresenta um menu visual e pede que você escolha **um dos 3 cenários** antes de instalar.
+
+### Cenário 1 — VPS/Cloud + Domínio Próprio + Let's Encrypt
+
+**Para quem tem**: servidor VPS e um domínio registrado (ex: `hub.minhaVTC.com.br`)
+
+O que acontece automaticamente:
+- Nginx configurado com `server_name seu.dominio`
+- Certbot obtém certificado SSL gratuito via Let's Encrypt
+- config.json gerado com `https://`
+
+**Pré-requisito**: o DNS do domínio deve apontar para o IP do servidor antes de iniciar.
+
+```
+seudominio.com → A → 1.2.3.4 (IP do servidor)
+```
+
+---
+
+### Cenário 2 — VPS/Cloud + DuckDNS + Let's Encrypt
+
+**Para quem tem**: servidor VPS mas **sem domínio registrado**
+
+O que acontece automaticamente:
+1. Você informa o subdomínio desejado (ex: `minha-vtc`) e o token DuckDNS
+2. O instalador atualiza o IP no DuckDNS imediatamente
+3. Cria script de atualização automática a cada 5 minutos via cron
+4. Certbot obtém certificado SSL para `minha-vtc.duckdns.org`
+
+**Como criar sua conta DuckDNS:**
+1. Acesse https://www.duckdns.org
+2. Faça login com Google, GitHub ou Discord
+3. Crie um subdomínio (ex: `minha-vtc`)
+4. Copie o **token** exibido na página principal
+
+> 💡 DuckDNS é gratuito, sem limite de uso, e funciona mesmo sem IP fixo.
+
+---
+
+### Cenário 3 — Servidor Local + Cloudflare Tunnel
+
+**Para quem tem**: computador ou servidor em casa/escritório, sem IP fixo e sem abrir portas no roteador.
+
+Este cenário **substitui completamente a antiga opção "localhost"** — que era incompatível com o Discord OAuth por exigir HTTPS.
+
+O que acontece automaticamente:
+1. Você instala `cloudflared` (feito pelo script)
+2. Informa o token do tunnel criado no painel Cloudflare
+3. O tunnel expõe sua aplicação local com HTTPS via Cloudflare Edge
+
+**Como criar o tunnel:**
+1. Acesse https://one.dash.cloudflare.com
+2. Networks → Tunnels → Create a tunnel
+3. Escolha **Cloudflared** como connector
+4. Copie o token gerado
+5. Em "Public Hostname", configure:
+   - Hostname: `hub.suavtc.com` (seu domínio gerenciado pelo Cloudflare)
+   - Service: `http://localhost:{porta}`
+
+> 💡 SSL é terminado pelo Cloudflare — não é necessário configurar Let's Encrypt localmente.
 
 ---
 
@@ -109,25 +183,34 @@ cd drivershub-installer
 
 ### 3. Organizar suas credenciais
 
-Antes de executar o script, anote tudo em um arquivo seguro:
-
 ```
 NOME DA VTC:
-ABREVIAÇÃO:
-DOMÍNIO (ou deixe em branco):
+ABREVIAÇÃO (sigla):
+CENÁRIO: [ ] 1-VPS+Domínio  [ ] 2-DuckDNS  [ ] 3-CloudflareTunnel
 PORTA: 7777
+
+=== CENÁRIO 1 ===
+Domínio: hub.minha-vtc.com.br (já apontando para o servidor)
+
+=== CENÁRIO 2 ===
+Subdomínio DuckDNS: minha-vtc  →  minha-vtc.duckdns.org
+Token DuckDNS:
+
+=== CENÁRIO 3 ===
+Hostname no Cloudflare: hub.minha-vtc.com
+Tunnel Token:
 
 === DISCORD ===
 Client ID:
 Client Secret:
 Bot Token:
-Server ID:
+Server (Guild) ID:
 
 === STEAM ===
 API Key:
 
 === BANCO DE DADOS ===
-Senha desejada:
+Senha desejada (mínimo 8 caracteres):
 ```
 
 ---
@@ -138,86 +221,55 @@ Senha desejada:
 bash scripts/install-drivershub.sh
 ```
 
-### Etapas do script
+### Passos executados
 
 ```
-[PASSO 1/10] Verificando requisitos do sistema
-[PASSO 2/10] Coletando informações da instalação  ← você preenche aqui
-[PASSO 2/10] Validando credenciais Discord e Steam ← automático, com revalidação se necessário
-[PASSO 3/10] Instalando dependências do sistema
-[PASSO 4/10] Instalando e configurando MySQL
-[PASSO 5/10] Instalando e configurando Redis
-[PASSO 6/10] Clonando repositório do Drivers Hub
-[PASSO 7/10] Configurando ambiente Python
-[PASSO 8/10] Aplicando correção no código
-[PASSO 9/10] Criando arquivo de configuração
-[PASSO 10/10] Configurando serviço systemd
+[PASSO  1/12] Verificando requisitos do sistema (RAM, disco, internet, portas)
+[PASSO  2/12] Escolhendo cenário de implantação
+[PASSO  3/12] Coletando informações da instalação
+[PASSO  4/12] Configurando DuckDNS  ← somente Cenário 2
+[PASSO  5/12] Validando credenciais Discord e Steam
+[PASSO  6/12] Instalando dependências do sistema
+[PASSO  7/12] Instalando e configurando MySQL
+[PASSO  8/12] Instalando e configurando Redis
+[PASSO  9/12] Clonando repositório do Drivers Hub
+[PASSO 10/12] Criando arquivo de configuração + tabelas
+[PASSO 11/12] Configurando serviço systemd + Nginx + SSL + Firewall
+[PASSO 12/12] Configurando Cloudflare Tunnel  ← somente Cenário 3
+               → fix api_host no banco
+               → configurar backup automático
+               → salvar estado
 ```
 
 ### Validação de credenciais
 
-O script valida automaticamente suas credenciais **antes** de iniciar a instalação:
+O script valida automaticamente **antes** de instalar:
 
 - ✅ **Discord Bot Token** — testa via `GET /users/@me`
-- ✅ **Discord Client ID + Secret** — testa via `GET /oauth2/applications/@me`
+- ✅ **Discord Client ID + Secret** — testa via endpoint `oauth2/token` com `client_credentials` grant (mais confiável que `@me`)
 - ✅ **Steam API Key** — testa via `GetSupportedAPIList`
 
-Se alguma credencial estiver inválida, o script avisa, permite corrigir os campos com problema e **revalida automaticamente** as novas credenciais antes de continuar.
+Se alguma credencial estiver inválida, o script permite corrigir e **revalida automaticamente** as novas credenciais antes de continuar.
 
-### Exemplo de preenchimento
+### Detecção de instalação existente (multi-VTC)
 
-```
-Nome completo da VTC: Minha VTC
-Abreviação da VTC (ex: cdmp): vtc
-Domínio (deixe vazio para localhost): hub.minhaVTC.com
-Porta do servidor [7777]: [Enter]
-
-Senha para o banco de dados MySQL: ************
-Confirme a senha: ************
-
-Discord Client ID: XXXXXXXXXXXXXXXXXXX
-Discord Client Secret: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-Discord Bot Token: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX...
-Discord Server (Guild) ID: XXXXXXXXXXXXXXXXXXX
-Steam API Key: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-⚙️  CONFIGURAÇÕES OPCIONAIS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ℹ️  O Drivers Hub possui uma interface web (Frontend React).
-   Para usá-la, o Nginx é obrigatório.
-
-Deseja instalar o Frontend (interface web) após o backend? [S/n]: s
-ℹ️  Frontend selecionado — Nginx será configurado automaticamente.
-
-Deseja configurar SSL/HTTPS com Let's Encrypt? [s/N]: s
-```
-
-> 💡 **Dica**: Se você escolher **não** instalar o Frontend, o script perguntará se quer o Nginx apenas como proxy reverso para a API. Você poderá instalar o Frontend depois a qualquer momento rodando `bash scripts/install-frontend.sh` — o Nginx será instalado automaticamente nesse momento.
-
-### Detecção de instalação existente
-
-Se o script detectar uma instalação anterior, exibirá um menu:
+Se já houver VTCs instaladas, o script exibe:
 
 ```
-⚠️  INSTALAÇÃO EXISTENTE DETECTADA!
+⚠️  INSTALAÇÃO(ÕES) EXISTENTE(S) DETECTADA(S)!
 
-  VTC:          Minha VTC (vtc)
-  Serviço:      ✅ Rodando
+VTCs instaladas neste servidor:
+  1) /opt/drivershub/.installer_state_cdmp  [cdmp]
+  2) /opt/drivershub/.installer_state_vtc2  [vtc2]
 
 O que deseja fazer?
-  1) Reparar instalação   — corrige dependências sem apagar dados
-  2) Nova instalação      — APAGA tudo e instala do zero
-  3) Cancelar
+  r) Reparar instalação existente
+  n) Nova instalação (nova VTC neste servidor)
+  q) Cancelar
 ```
 
-**Use opção 1 (Reparar)** quando:
-- O serviço parou de funcionar
-- Dependências Python estão corrompidas
-- Você quer reaplicar patches sem perder dados
-
-**Use opção 2 (Nova instalação)** quando:
-- Quer mudar o domínio, sigla ou senha
-- Quer recomeçar do zero
+**Use opção `r` (Reparar)** para corrigir uma VTC já instalada sem perder dados.
+**Use opção `n`** para adicionar uma nova VTC ao mesmo servidor.
 
 ---
 
@@ -227,28 +279,34 @@ O que deseja fazer?
 bash scripts/install-frontend.sh
 ```
 
-O script lê automaticamente as configurações salvas pelo backend em `/opt/drivershub/.installer_state` — você não precisa digitar o domínio ou sigla novamente.
+O script lê automaticamente as configurações de `/opt/drivershub/.installer_state_{sigla}` — você não precisa repetir domínio, sigla ou protocolo.
 
 ```
 [PASSO 1/6] Verificando pré-requisitos
-[PASSO 2/6] Verificando / instalando Node.js
+[PASSO 2/6] Verificando / instalando Node.js 20+
 [PASSO 3/6] Configurando variáveis do frontend
 [PASSO 4/6] Clonando repositório e fazendo build
-[PASSO 5/6] Fazendo deploy no Nginx
-[PASSO 6/6] Verificando instalação
+[PASSO 5/6] Deploy no Nginx
+[PASSO 6/6] Verificação final
 ```
 
-A `VITE_CONFIG_URL` é calculada automaticamente com base no domínio e sigla configurados no backend. O script mostra a URL gerada e pede confirmação antes de prosseguir.
+A `VITE_CONFIG_URL` é calculada automaticamente com base no domínio e protocolo do backend.
 
 ---
 
 ## ✅ Pós-Instalação
 
-### 1. Verificar o status
+### 1. Verificar a instalação
 
 ```bash
 bash scripts/verificar-instalacao.sh
 ```
+
+O script detecta automaticamente todas as VTCs instaladas e verifica:
+- Sistema operacional e recursos
+- MySQL, Redis, backend, serviço systemd
+- Nginx, SSL, Cloudflare Tunnel, DuckDNS
+- api_host no banco, backup e health check configurados
 
 ### 2. Configurar o Discord Redirect URI
 
@@ -256,37 +314,33 @@ No [Discord Developer Portal](https://discord.com/developers/applications):
 
 1. Selecione sua aplicação
 2. Vá em **OAuth2 → Redirects**
-3. Adicione:
+3. Adicione **exatamente** (sem barra no final):
 
 ```
-https://seudominio.com/[SIGLA]/api/auth/discord/callback
+https://seudominio.com/auth/discord/callback
 ```
+
+> ⚠️ **Atenção crítica**: O frontend usa `https://` fixo e o path `/auth/discord/callback` — **sem o prefixo da VTC** e **sem `/api/`**. Registrar a URL errada (ex: com `/cdmp/api/`) resulta em "redirect_uri inválido" ao tentar login.
 
 ### 3. Convidar o bot
 
-1. No portal: **OAuth2 → URL Generator**
+1. **OAuth2 → URL Generator**
 2. Escopos: `bot` + `applications.commands`
 3. Permissões: `Administrator`
-4. Abra a URL gerada no navegador e selecione seu servidor
+4. Abra a URL gerada e selecione seu servidor
 
 ### 4. Acessar o sistema
 
-| Situação | URL |
+| Cenário | URL |
 |---|---|
-| Com domínio + SSL | `https://seudominio.com/` |
-| Com domínio sem SSL | `http://seudominio.com/` |
-| Sem Nginx | `http://localhost:7777/[sigla]` |
+| Cenário 1 — VPS + domínio | `https://seudominio.com/` |
+| Cenário 2 — DuckDNS | `https://minha-vtc.duckdns.org/` |
+| Cenário 3 — Cloudflare Tunnel | `https://hub.suavtc.com/` |
 
-### 5. Primeiro login
-
-1. Clique em **Login com Discord**
-2. Autorize a aplicação
-3. Configure perfil e cargos no painel administrativo
-
-### 6. Configurar webhooks Discord *(opcional)*
+### 5. Configurar webhooks Discord *(opcional)*
 
 ```bash
-nano /opt/drivershub/HubBackend/config.json
+nano /opt/drivershub/[SIGLA]/HubBackend/config.json
 ```
 
 ```json
@@ -300,7 +354,7 @@ nano /opt/drivershub/HubBackend/config.json
 sudo systemctl restart drivershub-[SIGLA]
 ```
 
-### 7. Configurar IDs dos cargos Discord *(opcional)*
+### 6. Configurar IDs dos cargos Discord *(opcional)*
 
 1. Discord → Configurações → Avançado → **Modo Desenvolvedor** (ativar)
 2. Clique direito no cargo → **Copiar ID**
@@ -314,13 +368,124 @@ sudo systemctl restart drivershub-[SIGLA]
 
 ---
 
+## 🔁 Reconfigurar após instalação
+
+Para alterar qualquer configuração **sem reinstalar**, use:
+
+```bash
+bash scripts/reconfigure-drivershub.sh
+```
+
+**O que pode ser alterado:**
+
+| Opção | O que faz |
+|---|---|
+| **Domínio** | Atualiza config.json, Nginx (server_name) e api_host no banco |
+| **Credenciais Discord** | Atualiza Client ID, Secret, Bot Token e Guild ID no config.json |
+| **Steam API Key** | Atualiza a chave no config.json |
+| **Porta do backend** | Atualiza config.json e proxy_pass do Nginx |
+| **SSL / HTTPS** | Executa Certbot para novo ou renovado certificado |
+| **Cloudflare Tunnel** | Reinstala o serviço com novo token |
+| **Validar credenciais** | Testa Discord e Steam sem alterar nada |
+
+Após qualquer alteração, o script reinicia o serviço e limpa o cache Redis automaticamente.
+
+---
+
+## 🖥️ Multi-VTC no mesmo servidor
+
+O instalador suporta múltiplas VTCs no mesmo servidor. Cada VTC tem:
+
+- Diretório isolado: `/opt/drivershub/{sigla}/HubBackend/`
+- Banco de dados próprio: `{sigla}_db`
+- Serviço systemd próprio: `drivershub-{sigla}`
+- State file próprio: `/opt/drivershub/.installer_state_{sigla}`
+- Porta própria (configure uma porta diferente para cada VTC)
+- Script de backup próprio: `/opt/drivershub/backup-{sigla}.sh`
+
+**Para instalar uma segunda VTC:**
+
+```bash
+bash scripts/install-drivershub.sh
+# → Selecione: n) Nova instalação
+# → Informe a sigla e porta diferente (ex: vtc2, porta 7778)
+```
+
+O Nginx será atualizado automaticamente com a nova VTC em `/vtc2/`.
+
+---
+
+## 💾 Backup Automático
+
+O backup automático é configurado durante a instalação (cron diário às 3h). Para gerenciar:
+
+```bash
+bash scripts/backup-drivershub.sh
+```
+
+**Menu disponível:**
+
+| Opção | Descrição |
+|---|---|
+| Criar backup agora | Gera dump comprimido do banco |
+| Listar backups | Mostra arquivos com data e tamanho |
+| Restaurar backup | Restaura com backup de segurança automático antes |
+| Configurar cron | Alterar frequência (a cada hora, 6h, diário...) |
+| Ver log | Histórico de backups e erros |
+
+**Localização dos backups:**
+```
+/opt/drivershub/backups/{sigla}/
+  {sigla}_db_YYYYMMDD_HHMMSS.sql.gz  ← backups comprimidos
+  backup.log                          ← log de operações
+```
+
+Retenção padrão: **7 dias** (configurável).
+
+---
+
+## 🏥 Health Check
+
+Monitoramento automático dos serviços com notificação via Discord webhook.
+
+```bash
+bash scripts/health-check.sh
+```
+
+**O que é monitorado:**
+- Serviço systemd (`drivershub-{sigla}`) ativo?
+- Porta do backend respondendo?
+- Backend respondendo HTTP?
+- MySQL rodando?
+- Redis respondendo?
+
+**Notificações Discord:**
+- 🚨 Alerta quando algum serviço cai (primeira detecção)
+- ✅ Aviso de recuperação quando o serviço volta
+- 🔄 Tenta reiniciar o serviço automaticamente
+
+**Como configurar:**
+1. Crie um webhook no seu servidor Discord: Canal → Editar → Integrações → Webhooks
+2. Execute `bash scripts/health-check.sh` e informe a URL do webhook
+3. Escolha a frequência (padrão: a cada 5 minutos)
+
+```bash
+# Verificação manual imediata
+bash scripts/health-check.sh --run [SIGLA]
+
+# Ver log de health checks
+tail -50 /opt/drivershub/health-check.log
+```
+
+---
+
 ## 🔄 Atualizando
 
 ```bash
 bash scripts/update-drivershub.sh
 ```
 
-O script pergunta o que atualizar (backend, frontend ou ambos), faz **backup automático** do `config.json` e `.env.production`, executa `git pull`, e restaura as suas configurações após o pull — o `git pull` nunca vai sobrescrever seus dados.
+O script pergunta o que atualizar (backend, frontend ou ambos), faz **backup automático** do `config.json` e `.env.production`, executa `git pull`, e restaura suas configurações após o pull.
 
 ---
 
@@ -330,22 +495,22 @@ O script pergunta o que atualizar (backend, frontend ou ambos), faz **backup aut
 bash scripts/uninstall-drivershub.sh
 ```
 
-Cada etapa tem confirmação individual. O banco de dados exige uma confirmação extra por ser irreversível. MySQL, Redis, Nginx e Node.js são preservados pois podem estar em uso por outros projetos.
+Cada etapa tem confirmação individual. O banco de dados exige confirmação extra por ser irreversível.
 
 ---
 
 ## 🔨 Modo Reparo
 
-Se a instalação estiver com problema (serviço caindo, dependências corrompidas, Nginx com erro):
+Se a instalação estiver com problema:
 
 ```bash
 bash scripts/install-drivershub.sh
-# → Escolha: 1) Reparar instalação
+# → Escolha: r) Reparar instalação
 ```
 
-O que o reparo faz:
+**O que o reparo faz:**
 - Recarrega variáveis do `config.json` existente
-- Reinstala dependências Python
+- Reinstala dependências Python (sem filtro de dev)
 - Reaplicar patch do DATA DIRECTORY se necessário
 - Reinicia o serviço
 - **Não altera o `config.json` nem o banco de dados**
@@ -357,22 +522,19 @@ O que o reparo faz:
 ### Backend
 
 ```bash
-# Status e logs
+# Status e logs — substitua [SIGLA] pela sua abreviação
 sudo systemctl status drivershub-[SIGLA]
 sudo journalctl -u drivershub-[SIGLA] -f
 sudo journalctl -u drivershub-[SIGLA] -n 100
 
-# Controle do serviço
+# Controle
 sudo systemctl start   drivershub-[SIGLA]
 sudo systemctl stop    drivershub-[SIGLA]
 sudo systemctl restart drivershub-[SIGLA]
 
-# Após editar config.json
-sudo systemctl restart drivershub-[SIGLA]
-
 # Modo debug manual
 sudo systemctl stop drivershub-[SIGLA]
-cd /opt/drivershub/HubBackend
+cd /opt/drivershub/[SIGLA]/HubBackend
 source venv/bin/activate
 python3 src/main.py --config config.json
 ```
@@ -383,15 +545,14 @@ python3 src/main.py --config config.json
 # Acessar banco
 mysql -u [SIGLA]_user -p [SIGLA]_db
 
-# Backup
+# Backup manual
 mysqldump -u [SIGLA]_user -p [SIGLA]_db > backup_$(date +%Y%m%d).sql
 
 # Restaurar
 mysql -u [SIGLA]_user -p [SIGLA]_db < backup_YYYYMMDD.sql
 
-# Verificar banco
-sudo mysql -e "SHOW DATABASES;"
-sudo mysql -e "SELECT User, Host FROM mysql.user;"
+# Verificar tabelas
+sudo mysql -e "SHOW TABLES FROM [SIGLA]_db;" | wc -l
 ```
 
 ### Nginx
@@ -400,18 +561,26 @@ sudo mysql -e "SELECT User, Host FROM mysql.user;"
 sudo nginx -t                          # Testar configuração
 sudo systemctl reload nginx            # Recarregar
 sudo tail -f /var/log/nginx/error.log  # Logs de erro
-sudo tail -f /var/log/nginx/access.log # Logs de acesso
+cat /etc/nginx/sites-enabled/drivershub-[SIGLA]
 ```
 
-### Frontend (atualização manual)
+### Cloudflare Tunnel (Cenário 3)
 
 ```bash
-cd /opt/drivershub/HubFrontend
-git pull
-npm ci
-npm run build
-sudo rsync -a --delete build/ /var/www/drivershub-frontend/
-sudo systemctl reload nginx
+sudo systemctl status  cloudflared
+sudo systemctl restart cloudflared
+sudo journalctl -u cloudflared -f
+```
+
+### DuckDNS (Cenário 2)
+
+```bash
+# Verificar atualização manual
+bash /opt/drivershub/duckdns-update.sh
+cat /var/log/duckdns.log
+
+# Ver cron configurado
+sudo crontab -l | grep duckdns
 ```
 
 ---
@@ -420,55 +589,40 @@ sudo systemctl reload nginx
 
 ### Firewall
 
+O instalador configura o `ufw` automaticamente. Para verificar ou ajustar:
+
 ```bash
-sudo apt install -y ufw
-
-sudo ufw allow 22/tcp    # SSH — obrigatório!
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
-
-sudo ufw enable
-sudo ufw status
+sudo ufw status numbered    # Ver regras atuais
+sudo ufw allow 22/tcp       # SSH — adicionar se necessário
+sudo ufw allow 80/tcp       # HTTP
+sudo ufw allow 443/tcp      # HTTPS
 ```
 
-### Backups automáticos
+### Backups
 
-Crie um script de backup e agende via cron:
+O cron de backup é configurado durante a instalação. Para verificar:
 
 ```bash
-nano ~/backup-drivershub.sh
+crontab -l | grep backup    # Cron de backup
+ls -lh /opt/drivershub/backups/[SIGLA]/  # Arquivos
 ```
 
+### Certificado SSL
+
 ```bash
-#!/bin/bash
-SIGLA="vtc"
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/opt/drivershub/backups"
-
-mkdir -p "$BACKUP_DIR"
-
-# Backup banco
-mysqldump -u "${SIGLA}_user" -p'SUA_SENHA' "${SIGLA}_db" \
-    > "${BACKUP_DIR}/db_${DATE}.sql"
-
-# Backup config
-cp /opt/drivershub/HubBackend/config.json \
-   "${BACKUP_DIR}/config_${DATE}.json"
-
-# Manter apenas últimos 7 dias
-find "$BACKUP_DIR" -name "*.sql"  -mtime +7 -delete
-find "$BACKUP_DIR" -name "*.json" -mtime +7 -delete
-
-echo "Backup concluído: $DATE"
+sudo certbot certificates               # Ver certificados
+sudo certbot renew --dry-run            # Testar renovação
+# Renovação automática já configurada pelo Certbot
 ```
 
-```bash
-chmod +x ~/backup-drivershub.sh
+### config.json
 
-# Agendar backup diário às 3h
-crontab -e
-# Adicionar:
-# 0 3 * * * /home/seuusuario/backup-drivershub.sh >> /opt/drivershub/backup.log 2>&1
+```bash
+ls -la /opt/drivershub/[SIGLA]/HubBackend/config.json
+# Deve mostrar: -rw------- (permissão 600)
+
+# Se necessário, corrigir:
+chmod 600 /opt/drivershub/[SIGLA]/HubBackend/config.json
 ```
 
 ---
@@ -476,16 +630,19 @@ crontab -e
 ## ✅ Checklist Pós-Instalação
 
 ```
-[ ] Backend rodando       sudo systemctl status drivershub-[SIGLA]
-[ ] Frontend acessível    curl -s -o /dev/null -w "%{http_code}" http://localhost
-[ ] Redirect URI Discord  configurado no Developer Portal
-[ ] Bot Discord           convidado e online no servidor
-[ ] Login Discord         funcionando no navegador
-[ ] Cargos Discord        sincronizados no painel
-[ ] Webhooks Discord      configurados (opcional)
-[ ] Firewall              ufw status
-[ ] Backup automático     crontab -l
-[ ] SSL/HTTPS             certbot certificates (se aplicável)
+[ ] Backend rodando         sudo systemctl status drivershub-[SIGLA]
+[ ] Frontend acessível      curl -s -o /dev/null -w "%{http_code}" https://seudominio.com
+[ ] Redirect URI Discord    configurado em /auth/discord/callback (SEM prefixo VTC)
+[ ] Bot Discord             convidado e online no servidor
+[ ] Login Discord           funcionando no navegador
+[ ] Cargos Discord          sincronizados no painel admin
+[ ] Webhooks Discord        configurados no config.json (opcional)
+[ ] Firewall                sudo ufw status
+[ ] Backup automático       crontab -l | grep backup
+[ ] Health check            crontab -l | grep health-check (opcional)
+[ ] SSL/HTTPS               certbot certificates (Cenários 1 e 2)
+[ ] Cloudflare Tunnel       sudo systemctl status cloudflared (Cenário 3)
+[ ] DuckDNS                 sudo crontab -l | grep duckdns (Cenário 2)
 ```
 
 ---

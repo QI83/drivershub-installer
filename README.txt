@@ -2,6 +2,7 @@
 ║                                                               ║
 ║       INSTALADOR AUTOMÁTICO - DRIVERS HUB                     ║
 ║         Euro Truck Simulator 2 / American Truck Simulator     ║
+║                          v1.3.0                               ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 
@@ -16,6 +17,7 @@
   PASSO 2 — Backend (API, banco de dados, serviços)
   ─────────────────────────────────────────────────
   bash scripts/install-drivershub.sh
+  (escolha um dos 3 cenários de implantação)
 
   PASSO 3 — Frontend (interface web React)
   ─────────────────────────────────────────────────
@@ -24,6 +26,35 @@
   PASSO 4 — Verificar
   ─────────────────────────────────────────────────
   bash scripts/verificar-instalacao.sh
+
+
+🌐 CENÁRIOS DE IMPLANTAÇÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  O instalador pergunta qual cenário você quer usar:
+
+  CENÁRIO 1 — VPS/Cloud + Domínio Próprio + SSL
+  ─────────────────────────────────────────────────────────────
+  ✅ Você tem um servidor VPS (DigitalOcean, Vultr, Contabo...)
+  ✅ Você tem um domínio registrado (ex: minha-vtc.com.br)
+  ✅ SSL/HTTPS automático via Let's Encrypt
+  💡 Ideal para produção com domínio personalizado
+
+  CENÁRIO 2 — VPS/Cloud + DuckDNS (domínio gratuito) + SSL
+  ─────────────────────────────────────────────────────────────
+  ✅ Você tem um servidor VPS, mas SEM domínio registrado
+  ✅ Cria subdomínio GRÁTIS em duckdns.org (ex: minha-vtc.duckdns.org)
+  ✅ SSL/HTTPS automático via Let's Encrypt
+  ✅ Atualização automática de IP a cada 5 minutos
+  💡 Ideal para começar sem gastar com domínio
+
+  CENÁRIO 3 — Servidor Local + Cloudflare Tunnel
+  ─────────────────────────────────────────────────────────────
+  ✅ Computador/servidor em casa ou escritório
+  ✅ Sem IP fixo? Sem problema!
+  ✅ HTTPS automático via Cloudflare Tunnel (gratuito)
+  ✅ Não precisa abrir portas no roteador
+  💡 Substitui a antiga opção "localhost" — resolve SSL do Discord OAuth
 
 
 📋 ANTES DE COMEÇAR
@@ -35,14 +66,21 @@ Tenha em mãos:
    - Client ID
    - Client Secret
    - Bot Token
-   - Server ID
+   - Server (Guild) ID
 
 ✅ Steam API Key (https://steamcommunity.com/dev/apikey)
 
 ✅ Informações da sua VTC
-   - Nome completo
-   - Abreviação (sigla, ex: cdmp)
-   - Domínio (ex: hub.minhaVTC.com)
+   - Nome completo (ex: CDMP Express)
+   - Abreviação (ex: cdmp)
+
+✅ Para Cenário 2 — DuckDNS
+   - Conta em duckdns.org com subdomínio criado
+   - Token da conta DuckDNS
+
+✅ Para Cenário 3 — Cloudflare Tunnel
+   - Conta Cloudflare em one.dash.cloudflare.com
+   - Tunnel criado com hostname e token copiado
 
 
 💻 REQUISITOS DO SISTEMA
@@ -50,90 +88,111 @@ Tenha em mãos:
 
 Sistema: Ubuntu 20.04+ ou Debian 11+
 CPU: 2 cores
-RAM: 2 GB
-Disco: 10 GB livres
+RAM: 1.5 GB (verificado automaticamente)
+Disco: 5 GB livres (verificado automaticamente)
+Rede: Acesso à internet verificado automaticamente
+Portas: 80 e 443 verificadas automaticamente
 Acesso: Usuário normal com sudo (NÃO root!)
 
 
 🛠️  SCRIPTS DISPONÍVEIS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-install-drivershub.sh    Instala o Backend (detecta instalação existente)
+install-drivershub.sh    Instala o Backend (multi-VTC, 3 cenários)
 install-frontend.sh      Instala o Frontend React
+reconfigure-drivershub.sh Reconfigurar após instalação (domínio, Discord, porta...)
 update-drivershub.sh     Atualiza Backend e/ou Frontend
+backup-drivershub.sh     Backup manual/automático do banco de dados
+health-check.sh          Monitoramento com notificação Discord webhook
+verificar-instalacao.sh  Verifica todos os componentes (v2.0)
 uninstall-drivershub.sh  Remove o Drivers Hub completamente
-verificar-instalacao.sh  Verifica se tudo está funcionando
 
 
-✨ O QUE OS SCRIPTS FAZEM
+✨ O QUE O INSTALADOR FAZ (install-drivershub.sh)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-install-drivershub.sh (Backend):
-  ✅ Detecta instalação existente — repara ou reinstala do zero
-  ✅ Valida credenciais Discord e Steam antes de instalar
-  ✅ Instala Python 3, MySQL, Redis
-  ✅ Clona e configura o HubBackend
-  ✅ Gera config.json personalizado
-  ✅ Configura serviço systemd com restart automático
-  ✅ Instala e configura Nginx (opcional)
-  ✅ Configura SSL com Let's Encrypt (opcional)
-  ✅ Salva estado em /opt/drivershub/.installer_state
-
-install-frontend.sh (Frontend):
-  ✅ Verifica e instala Node.js 20+ se necessário
-  ✅ Clona o HubFrontend e gera .env.production automático
-  ✅ Build de produção (npm run build)
-  ✅ Deploy em /var/www/drivershub-frontend/
-  ✅ Configura roteamento SPA no Nginx (try_files)
-  ✅ Verificação final automática
-
-update-drivershub.sh:
-  ✅ Backup automático antes de qualquer alteração
-  ✅ git pull em Backend e/ou Frontend
-  ✅ Restaura config.json e .env.production após pull
-  ✅ Reinstala dependências Python e npm
-  ✅ Reinicia serviços automaticamente
-
-uninstall-drivershub.sh:
-  ✅ Remove serviço systemd
-  ✅ Remove configuração do Nginx
-  ✅ Remove banco de dados (confirmação extra obrigatória)
-  ✅ Remove arquivos do projeto
-  ✅ Cada etapa tem confirmação individual
+  ✅ Verifica recursos: RAM, disco, internet, portas 80/443
+  ✅ Exibe menu dos 3 cenários de implantação com explicações
+  ✅ Detecta instalações existentes (multi-VTC)
+  ✅ Configura DuckDNS automaticamente (Cenário 2)
+  ✅ Valida credenciais Discord e Steam com revalidação se necessário
+     (usa endpoint oauth2/token — mais confiável)
+  ✅ Instala Python 3, MySQL 8, Redis
+  ✅ Clona em /opt/drivershub/{sigla}/HubBackend (por VTC)
+  ✅ Gera config.json personalizado com protocolos corretos
+  ✅ Configura serviço systemd drivershub-{sigla} com restart automático
+  ✅ Configura Nginx com roteamento API + frontend
+  ✅ Configura SSL com Let's Encrypt (Cenários 1 e 2)
+  ✅ Configura Cloudflare Tunnel via cloudflared (Cenário 3)
+  ✅ Configura firewall ufw (HTTP, HTTPS, porta da API)
+  ✅ Configura backup automático diário às 3h
+  ✅ Salva estado em /opt/drivershub/.installer_state_{sigla}
 
 
 🔧 COMANDOS ÚTEIS APÓS INSTALAÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Backend:
-  sudo systemctl status drivershub-[SIGLA]
-  sudo journalctl -u drivershub-[SIGLA] -f
+Backend (substitua [SIGLA] pela sigla da sua VTC):
+  sudo systemctl status  drivershub-[SIGLA]
+  sudo journalctl -u     drivershub-[SIGLA] -f
   sudo systemctl restart drivershub-[SIGLA]
-  nano /opt/drivershub/HubBackend/config.json
+  nano /opt/drivershub/[SIGLA]/HubBackend/config.json
 
-Frontend (atualizar manualmente):
-  cd /opt/drivershub/HubFrontend
-  git pull && npm ci && npm run build
-  sudo rsync -a --delete build/ /var/www/drivershub-frontend/
-  sudo systemctl reload nginx
+Reconfigurar após instalação:
+  bash scripts/reconfigure-drivershub.sh
 
-Ou simplesmente:
+Backup do banco de dados:
+  bash scripts/backup-drivershub.sh           ← menu interativo
+  bash /opt/drivershub/backup-[SIGLA].sh      ← backup imediato
+
+Health check manual:
+  bash scripts/health-check.sh                ← configurar webhook
+  bash scripts/health-check.sh --run [SIGLA]  ← verificar agora
+
+Frontend (atualizar):
   bash scripts/update-drivershub.sh
+
+Verificar tudo:
+  bash scripts/verificar-instalacao.sh
 
 
 ⚠️  IMPORTANTE APÓS INSTALAÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Configure o Redirect URI no Discord Developer Portal:
-   https://[SEU_DOMINIO]/[SIGLA]/api/auth/discord/callback
+   OAuth2 → Redirects → Adicionar EXATAMENTE:
+
+   https://[SEU_DOMINIO]/auth/discord/callback
+
+   ⚠️  SEM o prefixo da VTC, SEM /api/ — é uma rota do frontend!
 
 2. Convide o bot Discord:
    OAuth2 > URL Generator > scopes: bot + applications.commands
    Permissões: Administrator
 
-3. Acesse: https://[SEU_DOMINIO]/
+3. Acesse:
+   Cenários 1 e 2:     https://[SEU_DOMINIO]/
+   Cenário 3 (Tunnel): https://[HOSTNAME_CLOUDFLARE]/
 
 4. Faça login com Discord e configure sua VTC
+
+
+📁 ESTRUTURA DE ARQUIVOS (Multi-VTC)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/opt/drivershub/
+├── [sigla1]/HubBackend/         ← Backend da VTC 1
+│   ├── config.json              ← Configuração (chmod 600)
+│   ├── src/                     ← Código fonte
+│   └── venv/                    ← Ambiente Python
+├── [sigla2]/HubBackend/         ← Backend da VTC 2 (se houver)
+├── .installer_state_[sigla1]    ← Estado da instalação VTC 1
+├── .installer_state_[sigla2]    ← Estado da instalação VTC 2
+├── backups/[sigla1]/            ← Backups da VTC 1
+├── backups/[sigla2]/            ← Backups da VTC 2
+├── backup-[sigla1].sh           ← Script de backup VTC 1
+├── duckdns-update.sh            ← Atualização DuckDNS (Cenário 2)
+└── health-check.log             ← Log do health check
 
 
 📚 DOCUMENTAÇÃO COMPLETA
@@ -151,8 +210,9 @@ Wiki oficial: https://wiki.charlws.com/books/chub
 Wiki:    https://wiki.charlws.com/books/chub
 Discord: https://discord.gg/wNTaaBZ5qd
 Site:    https://drivershub.charlws.com
+Bugs:    https://github.com/QI83/drivershub-installer/issues
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Versão: 1.2.0 | Criado para a comunidade ETS2/ATS 🚚
+Versão: 1.3.0 | Abril 2026 | Criado para a comunidade ETS2/ATS 🚚
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
