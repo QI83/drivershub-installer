@@ -376,19 +376,23 @@ Para alterar qualquer configuração **sem reinstalar**, use:
 bash scripts/reconfigure-drivershub.sh
 ```
 
-**O que pode ser alterado:**
+O script detecta automaticamente as VTCs instaladas. Em servidores com múltiplas VTCs, exibe um menu de seleção.
 
-| Opção | O que faz |
-|---|---|
-| **Domínio** | Atualiza config.json, Nginx (server_name) e api_host no banco |
-| **Credenciais Discord** | Atualiza Client ID, Secret, Bot Token e Guild ID no config.json |
-| **Steam API Key** | Atualiza a chave no config.json |
-| **Porta do backend** | Atualiza config.json e proxy_pass do Nginx |
-| **SSL / HTTPS** | Executa Certbot para novo ou renovado certificado |
-| **Cloudflare Tunnel** | Reinstala o serviço com novo token |
-| **Validar credenciais** | Testa Discord e Steam sem alterar nada |
+**O que pode ser reconfigurado:**
 
-Após qualquer alteração, o script reinicia o serviço e limpa o cache Redis automaticamente.
+| Opção | O que faz | Reinicia serviço? |
+|---|---|---|
+| **1 — Domínio** | Atualiza `config.json`, Nginx (`server_name`) e `api_host` no banco | ✅ Sim |
+| **2 — Credenciais Discord** | Atualiza Client ID, Secret, Bot Token e Guild ID | ✅ Sim |
+| **3 — Steam API Key** | Atualiza a chave no `config.json` | ✅ Sim |
+| **4 — Porta do backend** | Atualiza `server_port` no `config.json` e `proxy_pass` do Nginx | ✅ Sim |
+| **5 — SSL / HTTPS** | Executa Certbot para emitir ou renovar certificado | ✅ Sim |
+| **6 — Cloudflare Tunnel** | Reinstala `cloudflared` com novo token | — |
+| **7 — Validar credenciais** | Testa Discord e Steam **sem alterar nada** | — |
+
+Após qualquer alteração, o script atualiza o `config.json`, o Nginx, o `api_host` no banco de dados, limpa o cache Redis e reinicia o serviço automaticamente.
+
+> 📖 **Guia completo:** veja [GUIA_RECONFIGURE.md](GUIA_RECONFIGURE.md) para exemplos detalhados de cada opção, o que é preservado e solução de problemas.
 
 ---
 
@@ -446,28 +450,31 @@ Retenção padrão: **7 dias** (configurável).
 
 ## 🏥 Health Check
 
-Monitoramento automático dos serviços com notificação via Discord webhook.
+Monitoramento automático dos serviços com notificação via **Discord webhook** quando algo para ou se recupera.
 
 ```bash
 bash scripts/health-check.sh
 ```
 
-**O que é monitorado:**
-- Serviço systemd (`drivershub-{sigla}`) ativo?
-- Porta do backend respondendo?
-- Backend respondendo HTTP?
-- MySQL rodando?
-- Redis respondendo?
+**5 componentes monitorados a cada verificação:**
 
-**Notificações Discord:**
-- 🚨 Alerta quando algum serviço cai (primeira detecção)
-- ✅ Aviso de recuperação quando o serviço volta
-- 🔄 Tenta reiniciar o serviço automaticamente
+| Componente | Verificação |
+|---|---|
+| Serviço systemd | `drivershub-{sigla}` está ativo? |
+| Porta do backend | A porta configurada está escutando? |
+| Resposta HTTP | Backend responde em `http://localhost:{porta}/{sigla}`? |
+| MySQL | Serviço MySQL está ativo? |
+| Redis | `redis-cli ping` responde `PONG`? |
 
-**Como configurar:**
-1. Crie um webhook no seu servidor Discord: Canal → Editar → Integrações → Webhooks
-2. Execute `bash scripts/health-check.sh` e informe a URL do webhook
-3. Escolha a frequência (padrão: a cada 5 minutos)
+**Comportamento:**
+- 🚨 Notificação enviada na **primeira detecção** de problema (sem spam em falhas repetidas)
+- ✅ Notificação de recuperação quando o serviço volta
+- 🔄 Tenta reiniciar o `drivershub-{sigla}` automaticamente se estiver inativo
+
+**Configuração inicial:**
+1. Crie um webhook: Discord → Editar Canal → Integrações → Webhooks → Novo Webhook
+2. Execute o script e informe a URL do webhook
+3. Escolha a frequência: 1 min / 5 min (padrão) / 10 min
 
 ```bash
 # Verificação manual imediata
@@ -475,7 +482,12 @@ bash scripts/health-check.sh --run [SIGLA]
 
 # Ver log de health checks
 tail -50 /opt/drivershub/health-check.log
+
+# Filtrar apenas eventos de problema e recuperação
+grep -E 'DOWN|RESTART|RECOVERY' /opt/drivershub/health-check.log
 ```
+
+> 📖 **Guia completo:** veja [GUIA_HEALTH_CHECK.md](GUIA_HEALTH_CHECK.md) para detalhes sobre as notificações Discord, gerenciamento do cron, multi-VTC e solução de problemas.
 
 ---
 
