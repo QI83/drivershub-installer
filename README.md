@@ -144,11 +144,15 @@ bash scripts/verificar-instalacao.sh
 
 ### Reconfigurar após a instalação
 
-Para alterar domínio, credenciais Discord/Steam, porta, SSL ou Cloudflare Tunnel sem reinstalar:
+Para alterar domínio, credenciais Discord/Steam, porta, SSL ou Cloudflare Tunnel **sem reinstalar**:
 
 ```bash
 bash scripts/reconfigure-drivershub.sh
 ```
+
+O script detecta VTCs instaladas automaticamente e exibe um menu com 7 opções. Após cada alteração atualiza o `config.json`, o Nginx, o `api_host` no banco e reinicia o serviço.
+
+> 📖 Veja o **[Guia completo do reconfigure](docs/GUIA_RECONFIGURE.md)** para exemplos de cada opção.
 
 ### Backup do banco de dados
 
@@ -163,6 +167,8 @@ bash scripts/backup-drivershub.sh
 
 ### Health Check com notificação Discord
 
+Monitoramento automático que verifica 5 componentes (serviço, porta, HTTP, MySQL, Redis) e envia alertas via Discord webhook quando algo para ou se recupera.
+
 ```bash
 # Configurar webhook e frequência de monitoramento
 bash scripts/health-check.sh
@@ -170,6 +176,8 @@ bash scripts/health-check.sh
 # Verificação manual imediata
 bash scripts/health-check.sh --run {sigla}
 ```
+
+> 📖 Veja o **[Guia completo do health-check](docs/GUIA_HEALTH_CHECK.md)** para detalhes de configuração, notificações e multi-VTC.
 
 ### Atualizar
 
@@ -196,7 +204,9 @@ bash scripts/install-drivershub.sh
 
 | Documento | Descrição |
 |---|---|
-| 📖 [GUIA_INSTALACAO.md](docs/GUIA_INSTALACAO.md) | Guia detalhado passo a passo com os 3 cenários |
+| 📖 [GUIA_INSTALACAO.md](docs/GUIA_INSTALACAO.md) | Guia completo de instalação com os 3 cenários |
+| 🔁 [GUIA_RECONFIGURE.md](docs/GUIA_RECONFIGURE.md) | Como reconfigurar domínio, credenciais, SSL e Tunnel |
+| 🏥 [GUIA_HEALTH_CHECK.md](docs/GUIA_HEALTH_CHECK.md) | Monitoramento automático com notificações Discord |
 | 🔧 [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Soluções rápidas para os problemas mais comuns |
 | 📋 [README.txt](README.txt) | Referência rápida em texto puro |
 | 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) | Como contribuir com o projeto |
