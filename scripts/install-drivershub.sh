@@ -1494,6 +1494,10 @@ configure_firewall() {
 setup_backup_cron() {
     print_info "Configurando backup automático do banco de dados..."
 
+    # Garantir que o diretório base pertence ao usuário atual antes de escrever
+    sudo mkdir -p "${INSTALL_BASE}"
+    sudo chown "$USER":"$USER" "${INSTALL_BASE}"
+
     local backup_dir="${INSTALL_BASE}/backups/${VTC_ABBR}"
     local backup_script="${INSTALL_BASE}/backup-${VTC_ABBR}.sh"
 
