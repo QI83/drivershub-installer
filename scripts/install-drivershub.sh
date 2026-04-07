@@ -632,7 +632,7 @@ DUCKEOF
     sudo chmod +x "$duck_script"
 
     # Cron a cada 5 minutos
-    ( sudo crontab -l 2>/dev/null | grep -v duckdns-update; \
+    ( sudo crontab -l 2>/dev/null | grep -v duckdns-update || true; \
       echo "*/5 * * * * ${duck_script}" ) | sudo crontab -
 
     print_success "DuckDNS configurado! IP atualizado automaticamente a cada 5 minutos."
@@ -1532,7 +1532,7 @@ BACKUPEOF
     chmod +x "$backup_script"
 
     # Cron: backup diário às 3h da manhã
-    ( crontab -l 2>/dev/null | grep -v "backup-${VTC_ABBR}"; \
+    ( crontab -l 2>/dev/null | grep -v "backup-${VTC_ABBR}" || true; \
       echo "0 3 * * * ${backup_script}" ) | crontab -
 
     print_success "Backup automático configurado — diário às 3h em ${backup_dir}/"
