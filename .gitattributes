@@ -1,0 +1,11 @@
+# Forçar LF para todos os scripts shell — evita erros \r no Linux
+*.sh text eol=lf
+
+# Outros arquivos de texto
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.env text eol=lf
+*.conf text eol=lf
